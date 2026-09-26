@@ -21,13 +21,17 @@ _DATE_PATTERN = re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{4})$")
 
 def parse_brazilian_date(raw: str | None) -> date | None:
     """Aceita SOMENTE o formato estrito DD/MM/AAAA com as duas barras
-    no lugar certo. Qualquer outra coisa — incluindo os casos
-    conhecidos "03/102027" (falta uma barra) e "29/02/2029" (2029 não
-    é bissexto) — retorna None em vez de tentar adivinhar a correção."""
+    no lugar certo. Qualquer outra coisa — incluindo os casos reais
+    encontrados no PDF de convênios da UFRB: "03/102027" (falta uma
+    barra) e "27 /02/2029" (espaço perdido na extração do PDF) —
+    retorna None em vez de tentar adivinhar a correção. Espaços
+    internos são removidos antes de validar (ruído de extração de
+    PDF, não ambiguidade do dado em si — diferente de uma barra
+    faltando, que É ambíguo e por isso não é "corrigido")."""
     if not raw:
         return None
 
-    match = _DATE_PATTERN.match(raw.strip())
+    match = _DATE_PATTERN.match(re.sub(r"\s+", "", raw.strip()))
     if not match:
         return None
 

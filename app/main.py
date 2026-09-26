@@ -15,6 +15,7 @@ from app.routers import (
     empresas,
     experiencias,
     health,
+    importacoes,
     lattes,
     perfil,
     projetos,
@@ -44,3 +45,4 @@ app.include_router(areas_interesse.router, prefix="/api")
 app.include_router(catalogos.router, prefix="/api")
 app.include_router(lattes.router, prefix="/api")
 app.include_router(empresas.router, prefix="/api")
+app.include_router(importacoes.router, prefix="/api")
