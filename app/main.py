@@ -20,6 +20,7 @@ from app.routers import (
     perfil,
     projetos,
     tecnologias,
+    vagas,
 )
 
 app = FastAPI(title="Sistema de Recomendação de Estágio — API")
@@ -46,3 +47,4 @@ app.include_router(catalogos.router, prefix="/api")
 app.include_router(lattes.router, prefix="/api")
 app.include_router(empresas.router, prefix="/api")
 app.include_router(importacoes.router, prefix="/api")
+app.include_router(vagas.router, prefix="/api")
