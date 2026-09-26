@@ -21,5 +21,12 @@ class Settings(BaseSettings):
     jwt_secret_key: str = "troque-esta-chave-antes-de-usar-em-producao"
     jwt_expire_minutes: int = 60
 
+    # Bootstrap do usuário administrador (ver scripts/seed_admin.py) — o
+    # admin NUNCA se cadastra pelo endpoint público de cadastro; só existe
+    # se alguém com acesso a este .env rodar o script de seed.
+    admin_matricula: str = "admin.cetec"
+    admin_email: str = "admin@ufrb.edu.br"
+    admin_password: str = "troque-esta-senha-antes-de-rodar-o-seed"
+
 
 settings = Settings()
