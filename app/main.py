@@ -7,7 +7,18 @@ negócio diretamente neste arquivo.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import admin, areas_interesse, auth, catalogos, experiencias, health, perfil, projetos, tecnologias
+from app.routers import (
+    admin,
+    areas_interesse,
+    auth,
+    catalogos,
+    experiencias,
+    health,
+    lattes,
+    perfil,
+    projetos,
+    tecnologias,
+)
 
 app = FastAPI(title="Sistema de Recomendação de Estágio — API")
 
@@ -30,3 +41,4 @@ app.include_router(projetos.router, prefix="/api")
 app.include_router(experiencias.router, prefix="/api")
 app.include_router(areas_interesse.router, prefix="/api")
 app.include_router(catalogos.router, prefix="/api")
+app.include_router(lattes.router, prefix="/api")
