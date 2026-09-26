@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import decode_access_token
+from app.models.aluno import Aluno
 from app.models.usuario import Usuario
 
 # auto_error=False: sem isso, o HTTPBearer levanta 403 "Not authenticated"
@@ -59,3 +60,17 @@ def require_admin(usuario: Usuario = Depends(get_current_usuario)) -> Usuario:
     if usuario.role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso restrito ao administrador.")
     return usuario
+
+
+def get_current_aluno(
+    usuario: Usuario = Depends(get_current_usuario),
+    db: Session = Depends(get_db),
+) -> Aluno:
+    """A conta admin não tem linha em `alunos` — quem chamar uma rota de
+    perfil autenticado como admin recebe 404, nunca um perfil vazio."""
+    aluno = db.query(Aluno).filter(Aluno.usuario_id == usuario.id).first()
+    if aluno is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Esta conta não possui um perfil de aluno."
+        )
+    return aluno

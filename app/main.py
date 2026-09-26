@@ -1,14 +1,13 @@
 """
-Ponto de entrada da API. Fase 1: só o router de health check. Cada fase
-seguinte adiciona seu próprio router aqui (auth, perfil, lattes,
-empresas, vagas, recomendacoes, admin) — nunca lógica de negócio
-diretamente neste arquivo.
+Ponto de entrada da API. Cada fase adiciona seu próprio router aqui
+(lattes, empresas, vagas, recomendacoes ainda faltam) — nunca lógica de
+negócio diretamente neste arquivo.
 """
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import admin, auth, health
+from app.routers import admin, areas_interesse, auth, catalogos, experiencias, health, perfil, projetos, tecnologias
 
 app = FastAPI(title="Sistema de Recomendação de Estágio — API")
 
@@ -25,3 +24,9 @@ app.add_middleware(
 app.include_router(health.router, prefix="/api", tags=["health"])
 app.include_router(auth.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
+app.include_router(perfil.router, prefix="/api")
+app.include_router(tecnologias.router, prefix="/api")
+app.include_router(projetos.router, prefix="/api")
+app.include_router(experiencias.router, prefix="/api")
+app.include_router(areas_interesse.router, prefix="/api")
+app.include_router(catalogos.router, prefix="/api")

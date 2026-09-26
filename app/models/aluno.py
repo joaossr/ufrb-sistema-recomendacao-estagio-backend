@@ -17,7 +17,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
-from app.models.catalogo import Curso, Tecnologia
+from app.models.catalogo import AreaInteresse, AreaProjeto, Curso, Tecnologia, TipoProjeto
 
 
 class Aluno(Base):
@@ -177,6 +177,9 @@ class Projeto(Base):
     tecnologias: Mapped[list["ProjetoTecnologia"]] = relationship(
         back_populates="projeto", cascade="all, delete-orphan"
     )
+    curso: Mapped["Curso | None"] = relationship()
+    area_projeto: Mapped["AreaProjeto | None"] = relationship()
+    tipo_projeto: Mapped["TipoProjeto | None"] = relationship()
 
 
 class ProjetoTecnologia(Base):
@@ -226,3 +229,4 @@ class AlunoAreaInteresse(Base):
     area_interesse_id: Mapped[int] = mapped_column(ForeignKey("areas_interesse.id"), nullable=False)
 
     aluno: Mapped["Aluno"] = relationship(back_populates="areas_interesse")
+    area_interesse: Mapped["AreaInteresse"] = relationship()
