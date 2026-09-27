@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers import (
     admin,
+    admin_alunos,
     areas_interesse,
     auth,
     busca_semantica,
@@ -40,6 +41,7 @@ app.add_middleware(
 app.include_router(health.router, prefix="/api", tags=["health"])
 app.include_router(auth.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
+app.include_router(admin_alunos.router, prefix="/api")
 app.include_router(perfil.router, prefix="/api")
 app.include_router(tecnologias.router, prefix="/api")
 app.include_router(projetos.router, prefix="/api")
