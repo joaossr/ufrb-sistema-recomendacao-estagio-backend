@@ -43,15 +43,34 @@ def generate_embedding(text: str) -> list[float]:
         raise OllamaError(f"Resposta inesperada do Ollama: {data}") from exc
 
 
-def generate_completion(prompt: str, system: str | None = None) -> str:
-    """Reservado para a Fase 8 (análise de compatibilidade com Qwen3)
-    — nenhum endpoint chama isto ainda."""
-    payload = {"model": settings.ollama_llm_model, "prompt": prompt, "stream": False}
+def generate_completion(prompt: str, system: str | None = None, json_format: bool = False) -> str:
+    """Fase 8 (análise de compatibilidade com Qwen3). `json_format=True`
+    usa o modo JSON nativo do Ollama — testado e MUITO mais confiável
+    que só instruir por prompt: sem isso, o Qwen3 verbaliza raciocínio
+    antes/depois do JSON mesmo quando mandado responder só o JSON.
+
+    `num_predict` limita o tamanho da resposta: sem isso, um prompt
+    real (perfil + vaga completos) levou mais de 5 minutos em CPU
+    nesta máquina — o teto evita geração descontrolada dentro dos
+    campos de texto do JSON (ex.: "justificativa") sem cortar a
+    resposta de forma tão curta que fique incompreensível."""
+    payload = {
+        "model": settings.ollama_llm_model,
+        "prompt": prompt,
+        "stream": False,
+        "think": False,  # sem isso, o Qwen3 gasta o teto de num_predict "pensando" e nunca chega a responder (visto na prática: resposta vazia)
+        "options": {"num_predict": 600},
+    }
     if system:
         payload["system"] = system
+    if json_format:
+        payload["format"] = "json"
 
     try:
-        response = httpx.post(f"{settings.ollama_url}/api/generate", json=payload, timeout=120.0)
+        # Modelo de 4-8B em CPU (sem GPU utilizável nesta máquina, ver
+        # README) é lento: pode levar minutos por chamada — timeout
+        # generoso de propósito, não é bug.
+        response = httpx.post(f"{settings.ollama_url}/api/generate", json=payload, timeout=600.0)
         response.raise_for_status()
     except httpx.HTTPError as exc:
         raise OllamaError(f"Falha ao gerar resposta do LLM: {exc}") from exc

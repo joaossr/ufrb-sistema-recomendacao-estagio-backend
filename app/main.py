@@ -20,6 +20,7 @@ from app.routers import (
     lattes,
     perfil,
     projetos,
+    recomendacoes,
     tecnologias,
     vagas,
 )
@@ -50,3 +51,4 @@ app.include_router(empresas.router, prefix="/api")
 app.include_router(importacoes.router, prefix="/api")
 app.include_router(vagas.router, prefix="/api")
 app.include_router(busca_semantica.router, prefix="/api")
+app.include_router(recomendacoes.router, prefix="/api")

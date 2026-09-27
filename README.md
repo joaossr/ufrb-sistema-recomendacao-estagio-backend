@@ -4,7 +4,7 @@ API FastAPI que substitui o `localStorage` do frontend por PostgreSQL
 + pgvector, com Ollama/Qwen3 para a recomendação de estágios. Ver o
 plano completo de migração (32 etapas) para o roadmap.
 
-## Status: Fases 1 a 7 concluídas
+## Status: Fases 1 a 8 concluídas
 
 - **Fase 1**: PostgreSQL + pgvector via Docker, schema completo (24 tabelas), seed de centros/cursos, `GET /api/health`.
 - **Fase 2**: autenticação real (Argon2 + JWT) — `/api/auth/cadastro`, `/api/auth/login`, `/api/auth/me`. Conta admin só existe via `scripts/seed_admin.py`.
@@ -13,8 +13,23 @@ plano completo de migração (32 etapas) para o roadmap.
 - **Fase 5**: empresas/convênios estruturados, tratamento determinístico de datas de convênio, importador do PDF de convênios da UFRB (validado contra arquivo real).
 - **Fase 6**: CRUD de vagas.
 - **Fase 7**: representação textual de perfil/empresa/vaga → embeddings via Ollama (`qwen3-embedding:0.6b`, 1024 dimensões) → busca semântica via pgvector (distância de cosseno, Top 20).
+- **Fase 8**: regras objetivas (curso, status da vaga, prazo, convênio) filtrando ANTES do LLM → análise de compatibilidade com `qwen3:4b` (JSON estruturado: nível, índice, pontos compatíveis/parciais, lacunas, justificativa) → `Recomendacao` auditável no Postgres. Endpoint: `POST /api/perfil/recomendacoes/gerar`.
 
-**Ainda não implementado**: importador da COOPC (falta arquivo de exemplo), regras objetivas + análise com Qwen3 + recomendações estruturadas (Fase 8), página de recomendações/prospecção (Fase 9), painel administrativo completo (Fase 10), auditoria/testes automatizados/avaliação científica (Fase 11).
+**Ainda não implementado**: importador da COOPC (falta arquivo de exemplo), página de recomendações/prospecção/caminho inverso (Fase 9), painel administrativo completo (Fase 10), auditoria/testes automatizados/avaliação científica (Fase 11).
+
+### Sobre o modelo de linguagem usado
+
+O plano original previa `qwen3:8b`, mas nesta máquina (sem GPU
+utilizável, ver abaixo) ele é impraticável: nem um prompt trivial
+respondeu em minutos. `qwen3:4b` responde em ~15-30s por análise.
+Ambos os modelos já estão baixados; troque `OLLAMA_LLM_MODEL` no
+`.env` para `qwen3:8b` se/quando rodar em hardware com GPU funcional.
+
+Achado importante: o Qwen3 tem um modo de "pensar" (thinking) que, sem
+ser desligado, consome todo o limite de tokens da resposta e nunca
+chega a gerar o JSON final (resposta vazia). O cliente do Ollama
+(`app/services/ollama/client.py`) já envia `"think": false` em toda
+chamada de análise por causa disso.
 
 ## Pré-requisitos
 
@@ -118,5 +133,6 @@ backend/
 
 ## Próxima fase
 
-Fase 8 — regras objetivas + análise de compatibilidade com Qwen3 +
-persistência auditável da recomendação.
+Fase 9 — página de recomendações no frontend, prospecção (empresa
+compatível sem vaga ativa) e o caminho inverso (painel admin: vaga ou
+empresa → alunos compatíveis).

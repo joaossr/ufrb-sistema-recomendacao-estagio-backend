@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
-from app.models.empresa import Empresa
+from app.models.empresa import Convenio, Empresa
 
 
 class Vaga(Base):
@@ -44,3 +44,4 @@ class Vaga(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     empresa: Mapped["Empresa"] = relationship(back_populates="vagas")
+    convenio: Mapped["Convenio | None"] = relationship()
