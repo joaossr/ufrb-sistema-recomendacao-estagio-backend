@@ -43,4 +43,4 @@ class Vaga(Base):
     link: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    empresa: Mapped["Empresa"] = relationship()
+    empresa: Mapped["Empresa"] = relationship(back_populates="vagas")

@@ -13,6 +13,7 @@ from app.core.deps import get_current_aluno
 from app.models.aluno import Aluno, FormacaoComplementar, IdiomaAluno
 from app.routers.perfil import _serialize as serialize_perfil
 from app.schemas.lattes import LattesConfirmRequest, LattesConfirmResponse, LattesPreviewOut
+from app.services.embeddings.service import regenerate_aluno_embedding
 from app.services.lattes.course_matching import find_standard_course_by_name
 from app.services.lattes.parser import parse_lattes_xml
 
@@ -104,5 +105,7 @@ def confirmar(
 
     db.commit()
     db.refresh(aluno)
+    regenerate_aluno_embedding(db, aluno)
+    db.commit()
 
     return LattesConfirmResponse(perfil=serialize_perfil(aluno), course_matched=course_matched)

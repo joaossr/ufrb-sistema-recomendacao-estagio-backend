@@ -15,6 +15,7 @@ from app.core.deps import get_current_aluno
 from app.models.aluno import Aluno, AlunoTecnologia
 from app.models.catalogo import Tecnologia
 from app.schemas.catalogo_aluno import TecnologiaIn, TecnologiaOut, TecnologiaUpdate
+from app.services.embeddings.service import regenerate_aluno_embedding
 
 router = APIRouter(prefix="/perfil/tecnologias", tags=["tecnologias"])
 
@@ -46,6 +47,8 @@ def adicionar(payload: TecnologiaIn, aluno: Aluno = Depends(get_current_aluno), 
     db.add(vinculo)
     db.commit()
     db.refresh(vinculo)
+    regenerate_aluno_embedding(db, aluno)
+    db.commit()
     return _serialize(vinculo)
 
 
@@ -64,6 +67,8 @@ def atualizar(
     vinculo.nivel = payload.level
     db.commit()
     db.refresh(vinculo)
+    regenerate_aluno_embedding(db, aluno)
+    db.commit()
     return _serialize(vinculo)
 
 
@@ -75,4 +80,6 @@ def remover(vinculo_id: uuid.UUID, aluno: Aluno = Depends(get_current_aluno), db
     if vinculo is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tecnologia não encontrada.")
     db.delete(vinculo)
+    db.commit()
+    regenerate_aluno_embedding(db, aluno)
     db.commit()

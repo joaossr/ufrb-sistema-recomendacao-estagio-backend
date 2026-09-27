@@ -7,6 +7,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_aluno
 from app.models.aluno import Aluno, ExperienciaProfissional
 from app.schemas.catalogo_aluno import ExperienciaIn, ExperienciaOut
+from app.services.embeddings.service import regenerate_aluno_embedding
 
 router = APIRouter(prefix="/perfil/experiencias", tags=["experiencias"])
 
@@ -47,6 +48,8 @@ def adicionar(payload: ExperienciaIn, aluno: Aluno = Depends(get_current_aluno),
     db.add(exp)
     db.commit()
     db.refresh(exp)
+    regenerate_aluno_embedding(db, aluno)
+    db.commit()
     return _serialize(exp)
 
 
@@ -58,4 +61,6 @@ def remover(experiencia_id: uuid.UUID, aluno: Aluno = Depends(get_current_aluno)
     if exp is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Experiência não encontrada.")
     db.delete(exp)
+    db.commit()
+    regenerate_aluno_embedding(db, aluno)
     db.commit()

@@ -14,6 +14,7 @@ from app.core.database import get_db
 from app.core.deps import require_admin
 from app.models.empresa import Convenio, Empresa
 from app.schemas.empresa import ConvenioIn, ConvenioOut, EmpresaIn, EmpresaOut
+from app.services.embeddings.service import regenerate_empresa_embedding
 from app.services.importacao.convenio_status import parse_and_compute_status
 from app.services.importacao.empresas import get_or_create_empresa
 
@@ -30,6 +31,8 @@ def criar_empresa(payload: EmpresaIn, db: Session = Depends(get_db)):
     empresa, _criada = get_or_create_empresa(db, nome=payload.nome, cnpj=payload.cnpj)
     db.commit()
     db.refresh(empresa)
+    regenerate_empresa_embedding(db, empresa)
+    db.commit()
     return empresa
 
 

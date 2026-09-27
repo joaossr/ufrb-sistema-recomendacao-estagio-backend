@@ -15,6 +15,7 @@ from app.core.deps import get_current_aluno
 from app.models.aluno import Aluno, Projeto, ProjetoTecnologia
 from app.models.catalogo import AreaProjeto, Curso, TipoProjeto
 from app.schemas.catalogo_aluno import ProjetoIn, ProjetoOut
+from app.services.embeddings.service import regenerate_aluno_embedding
 
 router = APIRouter(prefix="/perfil/projetos", tags=["projetos"])
 
@@ -69,6 +70,8 @@ def adicionar(payload: ProjetoIn, aluno: Aluno = Depends(get_current_aluno), db:
 
     db.commit()
     db.refresh(projeto)
+    regenerate_aluno_embedding(db, aluno)
+    db.commit()
     return _serialize(projeto)
 
 
@@ -111,6 +114,8 @@ def atualizar(
 
     db.commit()
     db.refresh(projeto)
+    regenerate_aluno_embedding(db, aluno)
+    db.commit()
     return _serialize(projeto)
 
 
@@ -120,4 +125,6 @@ def remover(projeto_id: uuid.UUID, aluno: Aluno = Depends(get_current_aluno), db
     if projeto is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Projeto não encontrado.")
     db.delete(projeto)
+    db.commit()
+    regenerate_aluno_embedding(db, aluno)
     db.commit()

@@ -14,6 +14,7 @@ from app.core.deps import get_current_aluno
 from app.models.aluno import Aluno, AlunoAreaInteresse
 from app.models.catalogo import AreaInteresse
 from app.schemas.catalogo_aluno import AreaInteresseCreate, AreaInteresseOut, AreasInteresseSelecionadasUpdate
+from app.services.embeddings.service import regenerate_aluno_embedding
 
 router = APIRouter(tags=["areas-interesse"])
 
@@ -60,4 +61,6 @@ def atualizar_selecionadas(
 
     db.commit()
     db.refresh(aluno)
+    regenerate_aluno_embedding(db, aluno)
+    db.commit()
     return [v.area_interesse.nome for v in aluno.areas_interesse]

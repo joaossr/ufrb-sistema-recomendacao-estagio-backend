@@ -13,15 +13,26 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import require_admin
+from app.models.embedding import Embedding
 from app.models.empresa import Convenio, Empresa
 from app.models.vaga import Vaga
 from app.schemas.vaga import VagaIn, VagaOut, VagaStatusUpdate
+from app.services.embeddings.service import regenerate_empresa_embedding, regenerate_vaga_embedding
 
 router = APIRouter(prefix="/admin", tags=["vagas"], dependencies=[Depends(require_admin)])
 
 
 def empresa_tem_vaga_ativa(db: Session, empresa_id: uuid.UUID) -> bool:
     return db.query(Vaga).filter(Vaga.empresa_id == empresa_id, Vaga.status == "ativa").first() is not None
+
+
+def _regenerate_vaga_e_empresa(db: Session, vaga: Vaga):
+    """O texto da empresa (`empresa_to_text`) agrega cursos/áreas/
+    tecnologias das vagas dela — por isso qualquer mudança numa vaga
+    também invalida o embedding da empresa."""
+    regenerate_vaga_embedding(db, vaga)
+    regenerate_empresa_embedding(db, vaga.empresa)
+    db.commit()
 
 
 def _validate_convenio(db: Session, empresa_id: uuid.UUID, convenio_id: uuid.UUID | None):
@@ -62,6 +73,7 @@ def criar_vaga(empresa_id: uuid.UUID, payload: VagaIn, db: Session = Depends(get
     db.add(vaga)
     db.commit()
     db.refresh(vaga)
+    _regenerate_vaga_e_empresa(db, vaga)
     return vaga
 
 
@@ -85,6 +97,7 @@ def atualizar_vaga(vaga_id: uuid.UUID, payload: VagaIn, db: Session = Depends(ge
 
     db.commit()
     db.refresh(vaga)
+    _regenerate_vaga_e_empresa(db, vaga)
     return vaga
 
 
@@ -104,5 +117,9 @@ def excluir_vaga(vaga_id: uuid.UUID, db: Session = Depends(get_db)):
     vaga = db.get(Vaga, vaga_id)
     if vaga is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vaga não encontrada.")
+    empresa = vaga.empresa
+    db.query(Embedding).filter(Embedding.entidade_tipo == "vaga", Embedding.entidade_id == vaga.id).delete()
     db.delete(vaga)
+    db.commit()
+    regenerate_empresa_embedding(db, empresa)
     db.commit()

@@ -23,6 +23,12 @@ class Empresa(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     convenios: Mapped[list["Convenio"]] = relationship(back_populates="empresa", cascade="all, delete-orphan")
+    # Sem anotação Mapped[...] de propósito: Vaga já importa Empresa
+    # (para o lado empresa->Vaga), então resolver "Vaga" aqui por
+    # Mapped[list["Vaga"]] criaria import circular. Passar a classe
+    # como string para relationship() resolve via o registro do
+    # SQLAlchemy em vez de precisar do nome no namespace do módulo.
+    vagas = relationship("Vaga", back_populates="empresa", cascade="all, delete-orphan")
 
 
 class Convenio(Base):

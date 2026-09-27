@@ -15,7 +15,7 @@ class Settings(BaseSettings):
 
     ollama_url: str = "http://localhost:11434"
     ollama_llm_model: str = "qwen3:8b"
-    ollama_embed_model: str = "qwen3-embedding:0.6b-q8_0"
+    ollama_embed_model: str = "qwen3-embedding:0.6b"  # já é Q8_0 (única quantização publicada nesta tag)
     embedding_dim: int = 1024
 
     jwt_secret_key: str = "troque-esta-chave-antes-de-usar-em-producao"

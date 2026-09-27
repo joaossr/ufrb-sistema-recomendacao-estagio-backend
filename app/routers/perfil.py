@@ -13,6 +13,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_aluno
 from app.models.aluno import Aluno, IdiomaAluno, Tcc
 from app.schemas.perfil import PerfilOut, PerfilUpdate
+from app.services.embeddings.service import regenerate_aluno_embedding
 
 router = APIRouter(tags=["perfil"])
 
@@ -117,4 +118,6 @@ def update_perfil(payload: PerfilUpdate, aluno: Aluno = Depends(get_current_alun
 
     db.commit()
     db.refresh(aluno)
+    regenerate_aluno_embedding(db, aluno)
+    db.commit()
     return _serialize(aluno)

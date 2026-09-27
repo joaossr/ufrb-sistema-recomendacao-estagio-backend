@@ -11,6 +11,7 @@ from app.routers import (
     admin,
     areas_interesse,
     auth,
+    busca_semantica,
     catalogos,
     empresas,
     experiencias,
@@ -48,3 +49,4 @@ app.include_router(lattes.router, prefix="/api")
 app.include_router(empresas.router, prefix="/api")
 app.include_router(importacoes.router, prefix="/api")
 app.include_router(vagas.router, prefix="/api")
+app.include_router(busca_semantica.router, prefix="/api")
