@@ -4,7 +4,7 @@ API FastAPI que substitui o `localStorage` do frontend por PostgreSQL
 + pgvector, com Ollama/Qwen3 para a recomendação de estágios. Ver o
 plano completo de migração (32 etapas) para o roadmap.
 
-## Status: Fases 1 a 11 concluídas + Fases 12, 13, 14 e 15 (fora do roteiro original, pedido do usuário)
+## Status: Fases 1 a 11 concluídas + Fases 12 a 17 (fora do roteiro original, pedido do usuário)
 
 - **Fase 1**: PostgreSQL + pgvector via Docker, schema completo (24 tabelas), seed de centros/cursos, `GET /api/health`.
 - **Fase 2**: autenticação real (Argon2 + JWT) — `/api/auth/cadastro`, `/api/auth/login`, `/api/auth/me`. Conta admin só existe via `scripts/seed_admin.py`.
@@ -40,6 +40,13 @@ plano completo de migração (32 etapas) para o roadmap.
 - **Fase 15** (pedido explícito do usuário): reimportação de PDF/CSV com convênios atualizados, e correção de um bug relacionado.
   - **Confirmado** (já funcionava, agora com testes dedicados): uma empresa pode acumular vários convênios ao longo de reimportações sucessivas. A correspondência é por `empresa_id + processo` (ou `empresa_id + data_fim_original` quando não há processo) — um número de processo **novo** para uma empresa já conhecida **adiciona** um convênio (o antigo nunca é perdido/sobrescrito); o **mesmo** processo reimportado **atualiza** a linha existente (nunca duplica). Válido tanto para o importador de PDF quanto para o de planilha CSV/XLSX (`test_importacao_pdf.py::test_empresa_pode_ter_varios_convenios_ao_longo_de_reimportacoes`, `test_importacao_planilha.py`, os dois novos).
   - **Bug real encontrado e corrigido**: a regra de elegibilidade (`_convenio_ok` em `app/services/recomendacao/regras.py`) confiava no campo `status` **gravado** do convênio (`vigente`/`vencido`), que só é recalculado quando aquela linha é importada ou editada de novo. Se o tempo passar sem ninguém reimportar/tocar numa empresa específica, `status` ficava **congelado** no que era verdade na última vez — podendo dizer "vigente" para um convênio cuja `data_fim` já passou de verdade, contrariando o princípio de regras sempre determinísticas e corretas. Corrigido: a regra agora **recalcula sempre** a partir de `data_fim` (`compute_convenio_status`), nunca confia no texto armazenado. O campo `status` continua sendo gravado (útil como registro do que foi calculado na importação), só não é mais a fonte de verdade para decidir elegibilidade. Testado com dois casos (`test_regras.py`): rótulo desatualizado dizendo "vigente" com data já vencida → corretamente inelegível; e o inverso (rótulo "vencido" com data futura) → corretamente elegível.
+
+- **Fase 16** (pedido do usuário: "importei mas não mudou nada em empresas nem em vagas"): bug real encontrado e corrigido no **frontend**. O painel admin (`admin.js`) só carregava os dados de cada aba (Estudantes/Empresas/Vagas/Recomendações/Importações) **uma vez** por carregamento de página — depois de visitar uma aba, cliques seguintes nela nunca buscavam dados novos do servidor, mesmo após uma importação mudar tudo. Corrigido: toda vez que uma aba é clicada, ela recarrega os dados do zero (removido o cache `tabsLoaded`).
+
+- **Fase 17** (mesma investigação): o usuário forneceu um PDF novo de empresas+convênios+vagas com uma estrutura de tabela **completamente diferente** da original (9 colunas: `ID | Empresa | Área | Cidade | CNPJ | Nº Convênio/Processo | Situação | Início | Término`, em vez das 3 colunas do formato de referência). O importador de PDF antigo lia as 3 primeiras colunas às cegas, então a coluna "ID" virava o nome da empresa (por isso apareciam empresas com nome "1", "10", "11"...). Descobriu-se ainda que esse PDF tem uma SEGUNDA tabela, em páginas separadas, com as vagas (`Empresa | Área | Vaga | Requisitos | Tecnologias/Ferramentas | Modalidade | Carga | Bolsa | Qtd.`), ligada à primeira só pelo nome da empresa (sem CNPJ) — as duas tabelas têm exatamente 9 colunas cada, então a detecção de formato não pode se basear só na contagem de colunas.
+  - `app/services/importacao/convenios_pdf.py` reescrito: classifica cada tabela pelo **texto do cabeçalho** ("CNPJ" → empresa+convênio; "Vaga" → vaga; nenhum dos dois → formato antigo de 3 colunas). Convênios são processados primeiro; vagas são vinculadas à empresa já criada/atualizada pelo nome normalizado (nunca inventa uma empresa nova a partir de uma linha de vaga sem CNPJ — vira erro isolado daquela linha).
+  - Dados corrompidos da importação incorreta anterior foram identificados pela fonte da importação e removidos (102 empresas/convênios com nome numérico ou lixo); o PDF foi reimportado com o parser corrigido: **114/114 linhas, 0 erros, 50 empresas com CNPJ/área/cidade corretos, 57 convênios, 57 vagas** com tecnologias/requisitos/bolsa reais, tudo vinculado corretamente (conferido no painel: empresa → convênio → vaga na mesma tela).
+  - 6 testes novos garantindo a classificação de cabeçalho e o vínculo vaga↔empresa (incluindo o caso "vaga sem empresa correspondente" virar erro isolado, nunca empresa fantasma).
 
 **Ainda não implementado**: importador da COOPC (falta arquivo de exemplo — pode ter sido superado pelo importador de planilha da Fase 12, a confirmar com o usuário), autocomplete do formulário de perfil (`tech-input`/`project-tech-input`/`exp-tech-input` em `perfil.js`) via `/api/tecnologias`/`/api/areas-projeto`/`/api/tipos-projeto` (os endpoints já existem, só falta ligar o `Combobox` a eles).
 
@@ -148,7 +155,7 @@ e cole o token para testar rotas autenticadas manualmente.
 pytest
 ```
 
-111 testes, ~17s. Não precisa do servidor `uvicorn` no ar nem do
+116 testes, ~17s. Não precisa do servidor `uvicorn` no ar nem do
 Ollama rodando — só do Postgres do `docker compose up -d` (o mesmo
 container do banco de desenvolvimento). Na primeira execução de cada
 sessão de pytest, `tests/conftest.py` recria do zero o banco
