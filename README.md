@@ -4,7 +4,7 @@ API FastAPI que substitui o `localStorage` do frontend por PostgreSQL
 + pgvector, com Ollama/Qwen3 para a recomendação de estágios. Ver o
 plano completo de migração (32 etapas) para o roadmap.
 
-## Status: Fases 1 a 11 concluídas + Fases 12 e 13 (fora do roteiro original, pedido do usuário)
+## Status: Fases 1 a 11 concluídas + Fases 12, 13 e 14 (fora do roteiro original, pedido do usuário)
 
 - **Fase 1**: PostgreSQL + pgvector via Docker, schema completo (24 tabelas), seed de centros/cursos, `GET /api/health`.
 - **Fase 2**: autenticação real (Argon2 + JWT) — `/api/auth/cadastro`, `/api/auth/login`, `/api/auth/me`. Conta admin só existe via `scripts/seed_admin.py`.
@@ -29,6 +29,13 @@ plano completo de migração (32 etapas) para o roadmap.
   - Testado de ponta a ponta com o Ollama real, depois que a máquina liberou RAM (ver nota abaixo): importação da planilha real do usuário (78 linhas, 0 erros, reimportação depois confirmada idempotente — 0 empresas/convênios duplicados, 78 vagas atualizadas); `POST /admin/recomendacoes/gerar` processou os 8 alunos cadastrados (0 erros, 30 recomendações), e os 5 alunos de teste receberam exatamente as vagas da própria área (Medicina Veterinária só viu vagas de Medicina Veterinária, e assim por diante — nenhuma vaga de outra área vazou para nenhum aluno) com níveis/índices do Qwen3 condizentes com a sobreposição real de tecnologias do perfil; conferido também na tela `recomendacoes.html` do aluno (ex.: aluno de Engenharia Civil viu 5 vagas reais — Planeja Obras, Canteiro Engenharia, InfraBahia, Estrutural Projetos, Engenho Civil — com justificativas coerentes e nenhum erro no console). Suíte pytest com 100 testes (14 deles reescritos para o novo fluxo, incluindo um teste dedicado a isolamento entre alunos na geração em lote).
 
 - **Fase 13** (pedido explícito do usuário): relatório consolidado de recomendações no painel admin — nova `GET /admin/recomendacoes` (admin-only, filtros opcionais `?tipo=`/`?nivel=`) lista **todas** as recomendações de **todos** os alunos com o aluno já embutido em cada item (reaproveita o mesmo `_serializar(..., incluir_aluno=True)` do caminho inverso). Nova aba "Recomendações" em `admin.html` com o botão de gerar em lote (movido da aba Estudantes) + a tabela do relatório (Estudante/Curso/Empresa/Vaga/Tipo/Nível/Índice) com filtro por nível — o admin não precisa mais abrir o perfil de cada estudante para ver quem foi compatível com quê. Testado (3 novos testes: lista todos, exige admin, filtra por nível) e verificado ao vivo no navegador com os dados reais da Fase 12 (30 recomendações, ordenadas por índice).
+
+- **Fase 14** (pedido explícito do usuário): busca e detalhamento no painel admin, mais exportação em PDF.
+  - Busca por nome/CNPJ na aba Empresas e por título/empresa na aba Vagas (client-side, sobre a lista já carregada); a busca de estudantes por nome/matrícula já existia desde a Fase 10.
+  - Modal "Ver detalhes" em Empresas: identificação completa (nome, CNPJ, área, segmento, cidade, UF) + lista de convênios + lista de vagas com tecnologias — tudo o que foi extraído do PDF/CSV, sem precisar cruzar telas.
+  - Modal "Ver detalhes" no relatório de Recomendações: dados de contato do estudante (e-mail, telefone, LinkedIn, tecnologias) + dados da empresa/vaga + análise de compatibilidade completa (pontos compatíveis/parciais, lacunas, justificativa) — pensado para o admin decidir se vale a pena entrar em contato com a empresa.
+  - Novo `GET /admin/recomendacoes/{id}/pdf` (admin-only): gera um PDF (via `reportlab`, `app/services/relatorio/pdf_recomendacao.py`) com todos os dados do estudante e a análise de compatibilidade, para o admin enviar à empresa. Reproduz no próprio documento o aviso de que o índice/nível NUNCA é uma previsão de contratação. Botão "Baixar PDF para a empresa" no modal de detalhe da recomendação — usa `AuthService.apiDownload` (novo, `authService.js`) porque o download de um binário autenticado não pode ser feito com uma tag `<a href>` simples (precisa do header `Authorization`).
+  - Testado: 3 novos testes de PDF (gera com sucesso, exige admin, 404 para recomendação inexistente) + conferido visualmente que o PDF real tem todas as seções (dados do estudante, tecnologias, projetos, experiências, empresa/vaga, análise de compatibilidade com o aviso). Verificado ao vivo no navegador: busca em Empresas/Vagas, os dois modais de detalhe, e o download do PDF (200 OK).
 
 **Ainda não implementado**: importador da COOPC (falta arquivo de exemplo — pode ter sido superado pelo importador de planilha da Fase 12, a confirmar com o usuário), autocomplete do formulário de perfil (`tech-input`/`project-tech-input`/`exp-tech-input` em `perfil.js`) via `/api/tecnologias`/`/api/areas-projeto`/`/api/tipos-projeto` (os endpoints já existem, só falta ligar o `Combobox` a eles).
 
@@ -137,7 +144,7 @@ e cole o token para testar rotas autenticadas manualmente.
 pytest
 ```
 
-103 testes, ~15s. Não precisa do servidor `uvicorn` no ar nem do
+106 testes, ~20s. Não precisa do servidor `uvicorn` no ar nem do
 Ollama rodando — só do Postgres do `docker compose up -d` (o mesmo
 container do banco de desenvolvimento). Na primeira execução de cada
 sessão de pytest, `tests/conftest.py` recria do zero o banco

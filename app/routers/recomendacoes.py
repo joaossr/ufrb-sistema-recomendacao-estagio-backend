@@ -9,6 +9,7 @@ import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -31,6 +32,7 @@ from app.services.auditoria.log import registrar as registrar_log
 from app.services.recomendacao.caminho_inverso import buscar_alunos_compativeis_com_empresa, buscar_alunos_compativeis_com_vaga
 from app.services.recomendacao.pipeline import gerar_recomendacoes_para_aluno
 from app.services.recomendacao.prospeccao import gerar_prospeccoes_para_aluno
+from app.services.relatorio.pdf_recomendacao import gerar_pdf_recomendacao
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +128,27 @@ def listar_todas(
         query = query.filter(Recomendacao.nivel == nivel)
     registros = query.order_by(Recomendacao.indice_compatibilidade.desc()).all()
     return [_serializar(db, r, incluir_aluno=True) for r in registros]
+
+
+# --------------------------------------------------------------------
+# Admin: PDF de uma recomendação (Fase 14) — para enviar à empresa com
+# os dados do estudante e a análise de compatibilidade.
+# --------------------------------------------------------------------
+@router.get(
+    "/admin/recomendacoes/{recomendacao_id}/pdf",
+    dependencies=[Depends(require_admin)],
+)
+def baixar_pdf(recomendacao_id: uuid.UUID, db: Session = Depends(get_db)):
+    rec = db.get(Recomendacao, recomendacao_id)
+    if rec is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recomendação não encontrada.")
+
+    conteudo = gerar_pdf_recomendacao(db, rec)
+    return Response(
+        content=conteudo,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="compatibilidade_{rec.id}.pdf"'},
+    )
 
 
 # --------------------------------------------------------------------

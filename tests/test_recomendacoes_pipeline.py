@@ -236,3 +236,37 @@ def test_relatorio_admin_filtra_por_nivel(client, aluno_a, admin_headers, curso_
 
     resp = client.get("/api/admin/recomendacoes?nivel=baixa", headers=admin_headers)
     assert resp.json() == []
+
+
+def test_pdf_da_recomendacao_e_gerado_para_admin(client, aluno_a, admin_headers, curso_ti, mock_ollama):
+    """Fase 14: o admin baixa um PDF com os dados do estudante e a
+    analise de compatibilidade, para enviar a empresa."""
+    _preparar_aluno_com_curso(client, aluno_a, curso_ti, mock_ollama)
+    _criar_empresa_com_vaga_ativa(client, admin_headers, mock_ollama, curso_exigido="Engenharia de Computação")
+    _gerar_para_todos(client, admin_headers)
+
+    recomendacao_id = client.get("/api/perfil/recomendacoes", headers=aluno_a["headers"]).json()[0]["id"]
+
+    resp = client.get(f"/api/admin/recomendacoes/{recomendacao_id}/pdf", headers=admin_headers)
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/pdf"
+    assert "attachment" in resp.headers["content-disposition"]
+    assert resp.content.startswith(b"%PDF")
+    assert len(resp.content) > 500
+
+
+def test_pdf_da_recomendacao_exige_admin(client, aluno_a, admin_headers, curso_ti, mock_ollama):
+    _preparar_aluno_com_curso(client, aluno_a, curso_ti, mock_ollama)
+    _criar_empresa_com_vaga_ativa(client, admin_headers, mock_ollama, curso_exigido="Engenharia de Computação")
+    _gerar_para_todos(client, admin_headers)
+    recomendacao_id = client.get("/api/perfil/recomendacoes", headers=aluno_a["headers"]).json()[0]["id"]
+
+    resp = client.get(f"/api/admin/recomendacoes/{recomendacao_id}/pdf", headers=aluno_a["headers"])
+    assert resp.status_code == 403
+
+
+def test_pdf_de_recomendacao_inexistente_retorna_404(client, admin_headers):
+    import uuid
+
+    resp = client.get(f"/api/admin/recomendacoes/{uuid.uuid4()}/pdf", headers=admin_headers)
+    assert resp.status_code == 404
