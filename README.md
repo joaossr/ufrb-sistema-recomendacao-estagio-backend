@@ -4,7 +4,7 @@ API FastAPI que substitui o `localStorage` do frontend por PostgreSQL
 + pgvector, com Ollama/Qwen3 para a recomendação de estágios. Ver o
 plano completo de migração (32 etapas) para o roadmap.
 
-## Status: Fases 1 a 10 concluídas
+## Status: Fases 1 a 11 concluídas
 
 - **Fase 1**: PostgreSQL + pgvector via Docker, schema completo (24 tabelas), seed de centros/cursos, `GET /api/health`.
 - **Fase 2**: autenticação real (Argon2 + JWT) — `/api/auth/cadastro`, `/api/auth/login`, `/api/auth/me`. Conta admin só existe via `scripts/seed_admin.py`.
@@ -18,7 +18,9 @@ plano completo de migração (32 etapas) para o roadmap.
 
 - **Fase 10**: `GET /api/admin/alunos` (lista de estudantes reais com contagens e status de embedding) e `GET /api/admin/alunos/{id}` (detalhe completo, reaproveitando os serializers de perfil/tecnologias/projetos/experiências) — fecha a lacuna em que o admin só via os 3 perfis fictícios de `adminMockProfiles.js`. Catálogos públicos novos para autocomplete: `GET /api/tecnologias`, `GET /api/areas-projeto`, `GET /api/tipos-projeto` (mesmo padrão de `/centros`/`/cursos`/`/areas-interesse` desde a Fase 3). Testado em `scripts/test_fase10_manual.py`. `frontend/admin.html`/`admin.js` reescritos com 4 abas (Estudantes, Empresas & Convênios, Vagas, Importações) consumindo tudo isso de verdade: cadastro de empresa/convênio/vaga, upload do PDF de convênios pelo próprio painel, histórico de importações e disparo do caminho inverso (Fase 9) direto da lista de vagas/empresas. `js/adminMockProfiles.js` foi removido — não sobrou dado fictício em lugar nenhum do frontend.
 
-**Ainda não implementado**: importador da COOPC (falta arquivo de exemplo), autocomplete do formulário de perfil (`tech-input`/`project-tech-input`/`exp-tech-input` em `perfil.js`) via `/api/tecnologias`/`/api/areas-projeto`/`/api/tipos-projeto` (os endpoints já existem, só falta ligar o `Combobox` a eles), auditoria/testes automatizados/avaliação científica (Fase 11).
+- **Fase 11**: log de auditoria (`logs_auditoria` — criar/atualizar/excluir empresa/convênio/vaga, login com sucesso/falha sem gravar senha; `GET /api/admin/logs-auditoria`); avaliação humana das recomendações (`avaliacoes_humanas` — um admin registra se concorda com o `nivel` do Qwen3 e uma nota independente de 1 a 5, para comparar LLM x humano na dissertação; `POST/GET /api/admin/recomendacoes/{id}/avaliacoes`, `GET /api/admin/avaliacoes`); suíte de testes automatizados com **pytest** (`tests/`, 96 testes, banco Postgres de teste próprio e isolado — nunca toca no banco de desenvolvimento — Ollama sempre mockado de forma determinística, nunca chamado de verdade). Ver seção "Testes automatizados" abaixo.
+
+**Ainda não implementado**: importador da COOPC (falta arquivo de exemplo), autocomplete do formulário de perfil (`tech-input`/`project-tech-input`/`exp-tech-input` em `perfil.js`) via `/api/tecnologias`/`/api/areas-projeto`/`/api/tipos-projeto` (os endpoints já existem, só falta ligar o `Combobox` a eles).
 
 ### Sobre o modelo de linguagem usado
 
@@ -96,6 +98,37 @@ Documentação interativa (Swagger): http://127.0.0.1:8000/docs — use
 `POST /api/auth/login`, copie o `access_token`, clique em "Authorize"
 e cole o token para testar rotas autenticadas manualmente.
 
+## Testes automatizados (Fase 11 / passo 31)
+
+```bash
+pytest
+```
+
+96 testes, ~15s. Não precisa do servidor `uvicorn` no ar nem do
+Ollama rodando — só do Postgres do `docker compose up -d` (o mesmo
+container do banco de desenvolvimento). Na primeira execução de cada
+sessão de pytest, `tests/conftest.py` recria do zero o banco
+`sistema_estagio_test` (DROP+CREATE, extensões `pgcrypto`/`vector`,
+`Base.metadata.create_all`) — nunca toca em `sistema_estagio`, o
+banco de desenvolvimento. Cada teste roda dentro de uma transação com
+SAVEPOINT que é desfeita ao final (`join_transaction_mode="create_savepoint"`),
+garantindo isolamento total entre testes mesmo quando o código de
+produção faz `db.commit()`.
+
+Nenhum teste chama o Ollama de verdade: `generate_embedding` e
+`generate_completion` são sempre monkeypatchados (fixture
+`mock_ollama`) para respostas determinísticas. Isso testa a
+ORQUESTRAÇÃO do pipeline (regras de elegibilidade, prospecção,
+caminho inverso, auditoria) — a qualidade da resposta do LLM em si já
+foi validada manualmente contra o Ollama real nas Fases 7-9 (ver
+`scripts/test_fase*_manual.py`) e é o que a avaliação humana da Fase
+11 (`avaliacoes_humanas`) mede continuamente daqui pra frente.
+
+Organização em `tests/`:
+- `test_convenio_status.py`, `test_regras.py`, `test_analise.py` — lógica pura, sem banco.
+- `test_auth.py`, `test_perfil.py`, `test_catalogos.py`, `test_admin_alunos.py`, `test_admin_empresas_vagas.py`, `test_importacao_pdf.py` — integração via `TestClient`, isolamento entre contas de aluno é testado explicitamente.
+- `test_recomendacoes_pipeline.py` — pipeline completo Fase 8/9 fim-a-fim (regras + LLM mockado + persistência auditável).
+
 ## Estrutura
 
 ```
@@ -112,13 +145,14 @@ backend/
     routers/                # 1 arquivo por recurso (auth, perfil, tecnologias, projetos,
                              # experiencias, areas_interesse, catalogos, lattes, empresas,
                              # importacoes, vagas, busca_semantica, admin, admin_alunos,
-                             # recomendacoes)
+                             # recomendacoes, avaliacoes, auditoria)
     services/
       lattes/                # parser.py, course_matching.py
       importacao/             # convenio_status.py, empresas.py, convenios_pdf.py
       ollama/                  # client.py — único ponto de chamada à API do Ollama
       embeddings/               # text_representation.py, service.py, search.py
-      recomendacao/              # reservado para a Fase 8
+      recomendacao/              # regras.py, analise.py, pipeline.py, prospeccao.py, caminho_inverso.py
+      auditoria/                 # log.py — único ponto que grava em logs_auditoria
   alembic/                  # migrations (schema inicial em versions/0001_initial_schema.py)
   scripts/
     seed_centros_cursos.py
@@ -126,15 +160,21 @@ backend/
     seed_admin.py
     test_fase*_manual.py    # roteiros de verificação manual de cada fase (não é a suíte
                              # pytest da Fase 11 — rodam contra um servidor já no ar)
+  tests/                    # suíte pytest (Fase 11 / passo 31) — ver seção acima
   docker-compose.yml        # dentro do próprio backend/, para ficar autocontido
 ```
 
 ## Próxima fase
 
-Ligar o autocomplete do formulário de perfil (`tech-input`,
-`project-tech-input`, `exp-tech-input` em `frontend/js/perfil.js`) aos
-catálogos `/api/tecnologias`/`/api/areas-projeto`/`/api/tipos-projeto`
-via `Combobox.attach` (passo 28) — os endpoints já existem desde a
-Fase 10, só falta o frontend consumir. Depois, Fase 11: importador da
-COOPC (se um arquivo de exemplo aparecer), auditoria, suíte de testes
-automatizados (pytest) e estrutura de avaliação científica para o TCC.
+Não há próxima fase do roteiro original de 32 passos — as 11 fases
+estão concluídas. O que resta é oportunista:
+
+- Ligar o autocomplete do formulário de perfil (`tech-input`,
+  `project-tech-input`, `exp-tech-input` em `frontend/js/perfil.js`)
+  aos catálogos `/api/tecnologias`/`/api/areas-projeto`/`/api/tipos-projeto`
+  via `Combobox.attach` (passo 28) — os endpoints já existem desde a
+  Fase 10, só falta o frontend consumir.
+- Importador da COOPC (CSV/XLSX), se um arquivo de exemplo real
+  aparecer — sem isso, seria inventar um schema.
+- Usar `avaliacoes_humanas` de verdade (avaliar uma amostra de
+  recomendações reais) para o capítulo de avaliação do TCC.
