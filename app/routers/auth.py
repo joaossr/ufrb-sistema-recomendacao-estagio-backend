@@ -16,6 +16,7 @@ from app.core.security import create_access_token, hash_password, verify_passwor
 from app.models.aluno import Aluno
 from app.models.usuario import Usuario
 from app.schemas.auth import CadastroRequest, LoginRequest, TokenResponse, UsuarioPublic
+from app.services.auditoria.log import registrar as registrar_log
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -60,7 +61,18 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     usuario = db.query(Usuario).filter(Usuario.matricula == matricula).first()
 
     if usuario is None or not verify_password(payload.password, usuario.senha_hash):
+        # Loga a tentativa mesmo sem usuário resolvido (usuario_id fica
+        # None) — não guarda a senha, só a matrícula tentada, para dar
+        # visibilidade de tentativas de acesso sem expor credenciais.
+        registrar_log(
+            db, usuario.id if usuario else None, "login_falha", "usuario",
+            usuario.id if usuario else None, {"matricula_tentada": matricula},
+        )
+        db.commit()
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Matrícula ou senha incorretos.")
+
+    registrar_log(db, usuario.id, "login_sucesso", "usuario", usuario.id, {"matricula": matricula})
+    db.commit()
 
     token = create_access_token(subject=str(usuario.id), role=usuario.role)
     return TokenResponse(access_token=token, usuario=UsuarioPublic.model_validate(usuario))

@@ -32,6 +32,8 @@ from app.models.vaga import Vaga
 from app.models.embedding import Embedding
 from app.models.recomendacao import Recomendacao
 from app.models.importacao import Importacao
+from app.models.avaliacao_humana import AvaliacaoHumana
+from app.models.log_auditoria import LogAuditoria
 
 __all__ = [
     "Base",
@@ -59,4 +61,6 @@ __all__ = [
     "Embedding",
     "Recomendacao",
     "Importacao",
+    "AvaliacaoHumana",
+    "LogAuditoria",
 ]

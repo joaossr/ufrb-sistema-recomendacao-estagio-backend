@@ -11,7 +11,9 @@ from app.routers import (
     admin,
     admin_alunos,
     areas_interesse,
+    auditoria,
     auth,
+    avaliacoes,
     busca_semantica,
     catalogos,
     empresas,
@@ -54,3 +56,5 @@ app.include_router(importacoes.router, prefix="/api")
 app.include_router(vagas.router, prefix="/api")
 app.include_router(busca_semantica.router, prefix="/api")
 app.include_router(recomendacoes.router, prefix="/api")
+app.include_router(avaliacoes.router, prefix="/api")
+app.include_router(auditoria.router, prefix="/api")

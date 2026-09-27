@@ -15,8 +15,10 @@ from app.core.database import get_db
 from app.core.deps import require_admin
 from app.models.embedding import Embedding
 from app.models.empresa import Convenio, Empresa
+from app.models.usuario import Usuario
 from app.models.vaga import Vaga
 from app.schemas.vaga import VagaIn, VagaOut, VagaStatusUpdate
+from app.services.auditoria.log import registrar as registrar_log
 from app.services.embeddings.service import regenerate_empresa_embedding, regenerate_vaga_embedding
 
 router = APIRouter(prefix="/admin", tags=["vagas"], dependencies=[Depends(require_admin)])
@@ -63,7 +65,12 @@ def listar_vagas_da_empresa(empresa_id: uuid.UUID, db: Session = Depends(get_db)
 
 
 @router.post("/empresas/{empresa_id}/vagas", response_model=VagaOut, status_code=status.HTTP_201_CREATED)
-def criar_vaga(empresa_id: uuid.UUID, payload: VagaIn, db: Session = Depends(get_db)):
+def criar_vaga(
+    empresa_id: uuid.UUID,
+    payload: VagaIn,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(require_admin),
+):
     empresa = db.get(Empresa, empresa_id)
     if empresa is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Empresa não encontrada.")
@@ -71,6 +78,8 @@ def criar_vaga(empresa_id: uuid.UUID, payload: VagaIn, db: Session = Depends(get
 
     vaga = Vaga(empresa_id=empresa_id, **payload.model_dump())
     db.add(vaga)
+    db.flush()
+    registrar_log(db, usuario.id, "criar_vaga", "vaga", vaga.id, {"titulo": vaga.titulo, "empresa_id": str(empresa_id)})
     db.commit()
     db.refresh(vaga)
     _regenerate_vaga_e_empresa(db, vaga)
@@ -86,7 +95,12 @@ def obter_vaga(vaga_id: uuid.UUID, db: Session = Depends(get_db)):
 
 
 @router.put("/vagas/{vaga_id}", response_model=VagaOut)
-def atualizar_vaga(vaga_id: uuid.UUID, payload: VagaIn, db: Session = Depends(get_db)):
+def atualizar_vaga(
+    vaga_id: uuid.UUID,
+    payload: VagaIn,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(require_admin),
+):
     vaga = db.get(Vaga, vaga_id)
     if vaga is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vaga não encontrada.")
@@ -95,6 +109,7 @@ def atualizar_vaga(vaga_id: uuid.UUID, payload: VagaIn, db: Session = Depends(ge
     for field, value in payload.model_dump().items():
         setattr(vaga, field, value)
 
+    registrar_log(db, usuario.id, "atualizar_vaga", "vaga", vaga.id, {"titulo": vaga.titulo})
     db.commit()
     db.refresh(vaga)
     _regenerate_vaga_e_empresa(db, vaga)
@@ -102,22 +117,33 @@ def atualizar_vaga(vaga_id: uuid.UUID, payload: VagaIn, db: Session = Depends(ge
 
 
 @router.put("/vagas/{vaga_id}/status", response_model=VagaOut)
-def atualizar_status_vaga(vaga_id: uuid.UUID, payload: VagaStatusUpdate, db: Session = Depends(get_db)):
+def atualizar_status_vaga(
+    vaga_id: uuid.UUID,
+    payload: VagaStatusUpdate,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(require_admin),
+):
     vaga = db.get(Vaga, vaga_id)
     if vaga is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vaga não encontrada.")
+    status_anterior = vaga.status
     vaga.status = payload.status
+    registrar_log(
+        db, usuario.id, "atualizar_status_vaga", "vaga", vaga.id,
+        {"status_anterior": status_anterior, "status_novo": payload.status},
+    )
     db.commit()
     db.refresh(vaga)
     return vaga
 
 
 @router.delete("/vagas/{vaga_id}", status_code=status.HTTP_204_NO_CONTENT)
-def excluir_vaga(vaga_id: uuid.UUID, db: Session = Depends(get_db)):
+def excluir_vaga(vaga_id: uuid.UUID, db: Session = Depends(get_db), usuario: Usuario = Depends(require_admin)):
     vaga = db.get(Vaga, vaga_id)
     if vaga is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vaga não encontrada.")
     empresa = vaga.empresa
+    registrar_log(db, usuario.id, "excluir_vaga", "vaga", vaga.id, {"titulo": vaga.titulo})
     db.query(Embedding).filter(Embedding.entidade_tipo == "vaga", Embedding.entidade_id == vaga.id).delete()
     db.delete(vaga)
     db.commit()
