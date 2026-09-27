@@ -4,7 +4,7 @@ API FastAPI que substitui o `localStorage` do frontend por PostgreSQL
 + pgvector, com Ollama/Qwen3 para a recomendação de estágios. Ver o
 plano completo de migração (32 etapas) para o roadmap.
 
-## Status: Fases 1 a 9 concluídas, Fase 10 em andamento (backend pronto, frontend do admin ainda pendente)
+## Status: Fases 1 a 10 concluídas
 
 - **Fase 1**: PostgreSQL + pgvector via Docker, schema completo (24 tabelas), seed de centros/cursos, `GET /api/health`.
 - **Fase 2**: autenticação real (Argon2 + JWT) — `/api/auth/cadastro`, `/api/auth/login`, `/api/auth/me`. Conta admin só existe via `scripts/seed_admin.py`.
@@ -16,9 +16,9 @@ plano completo de migração (32 etapas) para o roadmap.
 - **Fase 8**: regras objetivas (curso, status da vaga, prazo, convênio) filtrando ANTES do LLM → análise de compatibilidade com `qwen3:8b` (JSON estruturado: nível, índice, pontos compatíveis/parciais, lacunas, justificativa) → `Recomendacao` auditável no Postgres. Endpoint: `POST /api/perfil/recomendacoes/gerar`.
 - **Fase 9**: `frontend/recomendacoes.html` (cards de vaga + prospecção, filtros por nível) consumindo a API de verdade; prospecção (empresa compatível sem vaga ativa — nunca chamada de "vaga disponível"); caminho inverso no admin (`POST /api/admin/vagas/{id}/recomendacoes/gerar` e `.../empresas/{id}/...`, aluno bloqueado dessas rotas).
 
-- **Fase 10 (backend, em andamento)**: `GET /api/admin/alunos` (lista de estudantes reais com contagens e status de embedding) e `GET /api/admin/alunos/{id}` (detalhe completo, reaproveitando os serializers de perfil/tecnologias/projetos/experiências) — fecha a lacuna em que o admin só via os 3 perfis fictícios de `adminMockProfiles.js`. Catálogos públicos novos para autocomplete: `GET /api/tecnologias`, `GET /api/areas-projeto`, `GET /api/tipos-projeto` (mesmo padrão de `/centros`/`/cursos`/`/areas-interesse` desde a Fase 3). Testado em `scripts/test_fase10_manual.py`.
+- **Fase 10**: `GET /api/admin/alunos` (lista de estudantes reais com contagens e status de embedding) e `GET /api/admin/alunos/{id}` (detalhe completo, reaproveitando os serializers de perfil/tecnologias/projetos/experiências) — fecha a lacuna em que o admin só via os 3 perfis fictícios de `adminMockProfiles.js`. Catálogos públicos novos para autocomplete: `GET /api/tecnologias`, `GET /api/areas-projeto`, `GET /api/tipos-projeto` (mesmo padrão de `/centros`/`/cursos`/`/areas-interesse` desde a Fase 3). Testado em `scripts/test_fase10_manual.py`. `frontend/admin.html`/`admin.js` reescritos com 4 abas (Estudantes, Empresas & Convênios, Vagas, Importações) consumindo tudo isso de verdade: cadastro de empresa/convênio/vaga, upload do PDF de convênios pelo próprio painel, histórico de importações e disparo do caminho inverso (Fase 9) direto da lista de vagas/empresas. `js/adminMockProfiles.js` foi removido — não sobrou dado fictício em lugar nenhum do frontend.
 
-**Ainda não implementado**: importador da COOPC (falta arquivo de exemplo), reescrita de `admin.html`/`admin.js` para consumir os endpoints acima + UI para o caminho inverso (hoje só a API existe) + upload de PDF de convênios pelo painel, autocomplete do frontend (`tech-input`/`project-tech-input`/`exp-tech-input`) via `/api/tecnologias`, auditoria/testes automatizados/avaliação científica (Fase 11).
+**Ainda não implementado**: importador da COOPC (falta arquivo de exemplo), autocomplete do formulário de perfil (`tech-input`/`project-tech-input`/`exp-tech-input` em `perfil.js`) via `/api/tecnologias`/`/api/areas-projeto`/`/api/tipos-projeto` (os endpoints já existem, só falta ligar o `Combobox` a eles), auditoria/testes automatizados/avaliação científica (Fase 11).
 
 ### Sobre o modelo de linguagem usado
 
@@ -131,9 +131,10 @@ backend/
 
 ## Próxima fase
 
-Fase 10 (continuação) — reescrever `frontend/admin.html`/`js/admin.js`
-para consumir `/api/admin/alunos` (estudantes reais em vez dos
-fictícios), além de empresas/convênios/vagas já existentes, com upload
-de PDF de convênios pelo painel, histórico de importações e UI para
-o caminho inverso (hoje só a API existe). Depois, ligar o autocomplete
-do formulário de perfil aos catálogos novos (`/api/tecnologias` etc.).
+Ligar o autocomplete do formulário de perfil (`tech-input`,
+`project-tech-input`, `exp-tech-input` em `frontend/js/perfil.js`) aos
+catálogos `/api/tecnologias`/`/api/areas-projeto`/`/api/tipos-projeto`
+via `Combobox.attach` (passo 28) — os endpoints já existem desde a
+Fase 10, só falta o frontend consumir. Depois, Fase 11: importador da
+COOPC (se um arquivo de exemplo aparecer), auditoria, suíte de testes
+automatizados (pytest) e estrutura de avaliação científica para o TCC.
