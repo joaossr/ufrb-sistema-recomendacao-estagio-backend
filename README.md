@@ -38,28 +38,21 @@ chamada de análise por causa disso.
 - [Ollama](https://ollama.com) instalado, com os modelos baixados:
   ```bash
   ollama pull qwen3-embedding:0.6b
-  ollama pull qwen3:8b
+  ollama pull qwen3:4b
+  ollama pull qwen3:8b   # opcional — funciona, mas mais lento (ver abaixo)
   ```
 
-### ⚠️ Ollama + GPU NVIDIA: erro conhecido nesta máquina
+### GPU NVIDIA (RTX 3050): funciona, com uma ressalva
 
-Com a GPU (RTX 3050) habilitada, o Ollama 0.34.4 falha com:
-```
-CUDA error: device kernel image is invalid
-```
-Solução: rodar o Ollama forçado em modo CPU. No Windows, feche o app
-do Ollama (ícone na bandeja) e suba o servidor manualmente com as
-variáveis de ambiente abaixo (em uma sessão PowerShell, por exemplo):
-
-```powershell
-$env:OLLAMA_NO_GPU="1"; $env:OLLAMA_LLM_LIBRARY="cpu"; $env:CUDA_VISIBLE_DEVICES=""
-& "$env:LOCALAPPDATA\Programs\Ollama\ollama.exe" serve
-```
-Um modelo de embedding de 0.6B roda bem em CPU (resposta em ~1s). Se
-quiser tornar isso permanente, defina essas variáveis como variáveis
-de ambiente do usuário no Windows (Configurações → Variáveis de
-Ambiente) — não fizemos isso automaticamente por ser uma mudança de
-configuração do sistema.
+Na primeira tentativa, o Ollama 0.34.4 falhou com `CUDA error: device
+kernel image is invalid` e o modo CPU foi usado como contorno (ver
+histórico do git se precisar dos comandos). **Depois de um restart
+limpo dos processos do Ollama, a GPU passou a funcionar normalmente**
+com `qwen3:4b` e `qwen3:8b` — inclusive mais rápido que em CPU
+(~10-20s por análise em vez de ~15-40s). Se o erro de CUDA voltar a
+aparecer, mate todos os processos `ollama*`/`llama-server.exe` e suba
+o Ollama de novo (`ollama serve` ou o app da bandeja) — no nosso caso
+foi só isso que resolveu, não precisou forçar CPU permanentemente.
 
 ## Como rodar
 
