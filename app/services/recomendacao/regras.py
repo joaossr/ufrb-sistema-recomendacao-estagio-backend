@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.models.aluno import Aluno
 from app.models.vaga import Vaga
+from app.services.importacao.convenio_status import compute_convenio_status
 
 
 @dataclass
@@ -46,11 +47,21 @@ def _vaga_dentro_do_prazo(vaga: Vaga, hoje: date | None = None) -> bool:
     return vaga.data_fim >= hoje
 
 
-def _convenio_ok(vaga: Vaga) -> bool:
+def _convenio_ok(vaga: Vaga, hoje: date | None = None) -> bool:
+    """Recalcula vigente/vencido a partir de `data_fim` SEMPRE que esta
+    regra roda — nunca confia no `status` gravado no banco. Esse campo
+    só é recomputado quando o convênio é importado ou editado; se o
+    tempo passar sem ninguém tocar naquela linha (ex.: a empresa não
+    aparece de novo num PDF/CSV reimportado), `status` fica congelado
+    no que era verdade na última vez, podendo dizer "vigente" para um
+    convênio que já venceu de verdade. `data_fim` é o dado bruto — a
+    fonte de verdade real — então é ele que decide, sempre."""
     if vaga.convenio_id is None:
         return True  # vaga sem convênio vinculado — não filtra por isso
     convenio = vaga.convenio
-    return convenio is not None and convenio.status != "vencido"
+    if convenio is None:
+        return False
+    return compute_convenio_status(convenio.data_fim, hoje) != "vencido"
 
 
 def vaga_elegivel(aluno: Aluno, vaga: Vaga) -> bool:

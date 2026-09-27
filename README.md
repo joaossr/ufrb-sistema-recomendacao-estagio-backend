@@ -4,7 +4,7 @@ API FastAPI que substitui o `localStorage` do frontend por PostgreSQL
 + pgvector, com Ollama/Qwen3 para a recomendação de estágios. Ver o
 plano completo de migração (32 etapas) para o roadmap.
 
-## Status: Fases 1 a 11 concluídas + Fases 12, 13 e 14 (fora do roteiro original, pedido do usuário)
+## Status: Fases 1 a 11 concluídas + Fases 12, 13, 14 e 15 (fora do roteiro original, pedido do usuário)
 
 - **Fase 1**: PostgreSQL + pgvector via Docker, schema completo (24 tabelas), seed de centros/cursos, `GET /api/health`.
 - **Fase 2**: autenticação real (Argon2 + JWT) — `/api/auth/cadastro`, `/api/auth/login`, `/api/auth/me`. Conta admin só existe via `scripts/seed_admin.py`.
@@ -36,6 +36,10 @@ plano completo de migração (32 etapas) para o roadmap.
   - Modal "Ver detalhes" no relatório de Recomendações: dados de contato do estudante (e-mail, telefone, LinkedIn, tecnologias) + dados da empresa/vaga + análise de compatibilidade completa (pontos compatíveis/parciais, lacunas, justificativa) — pensado para o admin decidir se vale a pena entrar em contato com a empresa.
   - Novo `GET /admin/recomendacoes/{id}/pdf` (admin-only): gera um PDF (via `reportlab`, `app/services/relatorio/pdf_recomendacao.py`) com todos os dados do estudante e a análise de compatibilidade, para o admin enviar à empresa. Reproduz no próprio documento o aviso de que o índice/nível NUNCA é uma previsão de contratação. Botão "Baixar PDF para a empresa" no modal de detalhe da recomendação — usa `AuthService.apiDownload` (novo, `authService.js`) porque o download de um binário autenticado não pode ser feito com uma tag `<a href>` simples (precisa do header `Authorization`).
   - Testado: 3 novos testes de PDF (gera com sucesso, exige admin, 404 para recomendação inexistente) + conferido visualmente que o PDF real tem todas as seções (dados do estudante, tecnologias, projetos, experiências, empresa/vaga, análise de compatibilidade com o aviso). Verificado ao vivo no navegador: busca em Empresas/Vagas, os dois modais de detalhe, e o download do PDF (200 OK).
+
+- **Fase 15** (pedido explícito do usuário): reimportação de PDF/CSV com convênios atualizados, e correção de um bug relacionado.
+  - **Confirmado** (já funcionava, agora com testes dedicados): uma empresa pode acumular vários convênios ao longo de reimportações sucessivas. A correspondência é por `empresa_id + processo` (ou `empresa_id + data_fim_original` quando não há processo) — um número de processo **novo** para uma empresa já conhecida **adiciona** um convênio (o antigo nunca é perdido/sobrescrito); o **mesmo** processo reimportado **atualiza** a linha existente (nunca duplica). Válido tanto para o importador de PDF quanto para o de planilha CSV/XLSX (`test_importacao_pdf.py::test_empresa_pode_ter_varios_convenios_ao_longo_de_reimportacoes`, `test_importacao_planilha.py`, os dois novos).
+  - **Bug real encontrado e corrigido**: a regra de elegibilidade (`_convenio_ok` em `app/services/recomendacao/regras.py`) confiava no campo `status` **gravado** do convênio (`vigente`/`vencido`), que só é recalculado quando aquela linha é importada ou editada de novo. Se o tempo passar sem ninguém reimportar/tocar numa empresa específica, `status` ficava **congelado** no que era verdade na última vez — podendo dizer "vigente" para um convênio cuja `data_fim` já passou de verdade, contrariando o princípio de regras sempre determinísticas e corretas. Corrigido: a regra agora **recalcula sempre** a partir de `data_fim` (`compute_convenio_status`), nunca confia no texto armazenado. O campo `status` continua sendo gravado (útil como registro do que foi calculado na importação), só não é mais a fonte de verdade para decidir elegibilidade. Testado com dois casos (`test_regras.py`): rótulo desatualizado dizendo "vigente" com data já vencida → corretamente inelegível; e o inverso (rótulo "vencido" com data futura) → corretamente elegível.
 
 **Ainda não implementado**: importador da COOPC (falta arquivo de exemplo — pode ter sido superado pelo importador de planilha da Fase 12, a confirmar com o usuário), autocomplete do formulário de perfil (`tech-input`/`project-tech-input`/`exp-tech-input` em `perfil.js`) via `/api/tecnologias`/`/api/areas-projeto`/`/api/tipos-projeto` (os endpoints já existem, só falta ligar o `Combobox` a eles).
 
@@ -144,7 +148,7 @@ e cole o token para testar rotas autenticadas manualmente.
 pytest
 ```
 
-106 testes, ~20s. Não precisa do servidor `uvicorn` no ar nem do
+111 testes, ~17s. Não precisa do servidor `uvicorn` no ar nem do
 Ollama rodando — só do Postgres do `docker compose up -d` (o mesmo
 container do banco de desenvolvimento). Na primeira execução de cada
 sessão de pytest, `tests/conftest.py` recria do zero o banco

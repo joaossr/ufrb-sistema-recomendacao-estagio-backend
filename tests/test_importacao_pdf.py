@@ -88,6 +88,46 @@ def test_reimportar_o_mesmo_processo_atualiza_em_vez_de_duplicar(db_session, mon
     assert convenios[0].status == "vigente"
 
 
+def test_empresa_pode_ter_varios_convenios_ao_longo_de_reimportacoes(db_session, monkeypatch):
+    """Pedido explícito do usuário: numa nova importação, uma empresa
+    que já tinha um convênio vigente pode ganhar um SEGUNDO convênio
+    (processo diferente, ex.: renovação com número novo, ou termo
+    aditivo separado) — o convênio antigo não pode ser perdido nem
+    misturado com o novo, os dois convivem no histórico da empresa."""
+    _fake_rows(
+        monkeypatch,
+        [{"nome": "Empresa Multi-Convenio", "processo": "100/2024", "data_fim_original": "01/01/2020", "pagina": 1}],
+    )
+    convenios_pdf_module.import_convenios_pdf(db_session, b"pdf antigo", fonte="pdf_antigo.pdf")
+
+    empresa = db_session.query(Empresa).filter(Empresa.nome == "Empresa Multi-Convenio").first()
+    convenio_antigo = db_session.query(Convenio).filter(Convenio.empresa_id == empresa.id).first()
+    assert convenio_antigo.status == "vencido"
+    assert convenio_antigo.processo == "100/2024"
+
+    # PDF novo: mesma empresa, processo NOVO (não é atualização do
+    # antigo — é um convênio adicional, com sua própria vigência).
+    _fake_rows(
+        monkeypatch,
+        [{"nome": "Empresa Multi-Convenio", "processo": "200/2026", "data_fim_original": "01/01/2030", "pagina": 1}],
+    )
+    convenios_pdf_module.import_convenios_pdf(db_session, b"pdf novo", fonte="pdf_novo.pdf")
+
+    convenios = (
+        db_session.query(Convenio)
+        .filter(Convenio.empresa_id == empresa.id)
+        .order_by(Convenio.processo)
+        .all()
+    )
+    assert len(convenios) == 2, "o convenio antigo nao pode ter sido perdido/sobrescrito"
+    assert convenios[0].processo == "100/2024"
+    assert convenios[0].status == "vencido"  # continua vencido, intocado
+    assert convenios[1].processo == "200/2026"
+    assert convenios[1].status == "vigente"
+
+
+
+
 def test_pdf_corrompido_nao_derruba_a_requisicao(db_session, monkeypatch):
     def _levanta_erro(pdf_bytes):
         raise RuntimeError("PDF corrompido (simulado)")

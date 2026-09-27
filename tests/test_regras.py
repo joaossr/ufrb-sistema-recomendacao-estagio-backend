@@ -78,19 +78,46 @@ def test_vaga_sem_data_fim_nao_e_filtrada_por_prazo():
 
 
 def test_vaga_com_convenio_vencido_nao_e_elegivel():
+    ontem = date.today() - timedelta(days=1)
     vaga = _vaga(status="ativa", cursos=[])
     vaga.convenio_id = "algum-id"
-    vaga.convenio = Convenio(status="vencido")
+    vaga.convenio = Convenio(status="vencido", data_fim=ontem)
     assert vaga_elegivel(_aluno(), vaga) is False
 
 
 def test_vaga_com_convenio_vigente_e_elegivel():
+    amanha = date.today() + timedelta(days=1)
     vaga = _vaga(status="ativa", cursos=[])
     vaga.convenio_id = "algum-id"
-    vaga.convenio = Convenio(status="vigente")
+    vaga.convenio = Convenio(status="vigente", data_fim=amanha)
     assert vaga_elegivel(_aluno(), vaga) is True
 
 
 def test_vaga_sem_convenio_vinculado_nao_e_filtrada_por_isso():
     vaga = _vaga(status="ativa", cursos=[], convenio_id=None)
+    assert vaga_elegivel(_aluno(), vaga) is True
+
+
+def test_convenio_com_status_desatualizado_no_banco_e_recalculado_pela_data():
+    """Reproduz o cenário relatado pelo usuário: um convênio foi
+    importado como 'vigente' num PDF antigo e ninguém nunca mais
+    tocou naquela linha — `status` continua dizendo 'vigente' no
+    banco, mas `data_fim` já passou de verdade. A regra de
+    elegibilidade tem que confiar em `data_fim` (o dado bruto), nunca
+    no rótulo congelado desde a última importação."""
+    ontem = date.today() - timedelta(days=1)
+    vaga = _vaga(status="ativa", cursos=[])
+    vaga.convenio_id = "algum-id"
+    vaga.convenio = Convenio(status="vigente", data_fim=ontem)  # rótulo desatualizado de propósito
+    assert vaga_elegivel(_aluno(), vaga) is False
+
+
+def test_convenio_com_status_vencido_no_banco_mas_data_fim_futura_e_recalculado_como_vigente():
+    """O inverso também precisa funcionar: se por algum motivo o rótulo
+    salvo diz 'vencido' mas a data_fim é futura, a vaga é elegível —
+    a data manda, não o texto congelado."""
+    amanha = date.today() + timedelta(days=1)
+    vaga = _vaga(status="ativa", cursos=[])
+    vaga.convenio_id = "algum-id"
+    vaga.convenio = Convenio(status="vencido", data_fim=amanha)
     assert vaga_elegivel(_aluno(), vaga) is True
