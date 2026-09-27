@@ -16,6 +16,10 @@ class EmpresaOut(BaseModel):
     nome: str
     nome_normalizado: str
     cnpj: str | None
+    area: str | None
+    segmento: str | None
+    cidade: str | None
+    uf: str | None
     created_at: datetime
 
 

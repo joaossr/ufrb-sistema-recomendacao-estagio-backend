@@ -39,25 +39,55 @@ def normalize_company_name(name: str) -> str:
     return _EXTRA_SPACE.sub(" ", without_suffix).strip().upper()
 
 
-def get_or_create_empresa(db: Session, *, nome: str, cnpj: str | None = None) -> tuple[Empresa, bool]:
+def get_or_create_empresa(
+    db: Session,
+    *,
+    nome: str,
+    cnpj: str | None = None,
+    area: str | None = None,
+    segmento: str | None = None,
+    cidade: str | None = None,
+    uf: str | None = None,
+) -> tuple[Empresa, bool]:
     """Retorna (empresa, criada). Busca por CNPJ primeiro (identificador
-    mais confiável); sem CNPJ, cai para o nome normalizado."""
+    mais confiável); sem CNPJ, cai para o nome normalizado. Os campos
+    extras (área/segmento/cidade/UF, Fase 12) só completam dado
+    ausente — nunca sobrescrevem o que já existia numa reimportação."""
     cnpj_normalizado = normalize_cnpj(cnpj)
+
+    def _completar_campos_ausentes(empresa: Empresa) -> None:
+        if cnpj_normalizado and not empresa.cnpj:
+            empresa.cnpj = cnpj_normalizado
+        if area and not empresa.area:
+            empresa.area = area
+        if segmento and not empresa.segmento:
+            empresa.segmento = segmento
+        if cidade and not empresa.cidade:
+            empresa.cidade = cidade
+        if uf and not empresa.uf:
+            empresa.uf = uf
+
     if cnpj_normalizado:
         existente = db.query(Empresa).filter(Empresa.cnpj == cnpj_normalizado).first()
         if existente:
+            _completar_campos_ausentes(existente)
             return existente, False
 
     nome_normalizado = normalize_company_name(nome)
     existente = db.query(Empresa).filter(Empresa.nome_normalizado == nome_normalizado).first()
     if existente:
-        # Empresa já existia sem CNPJ registrado e agora ele apareceu —
-        # completa o dado em vez de criar um registro novo.
-        if cnpj_normalizado and not existente.cnpj:
-            existente.cnpj = cnpj_normalizado
+        _completar_campos_ausentes(existente)
         return existente, False
 
-    empresa = Empresa(nome=nome.strip(), nome_normalizado=nome_normalizado, cnpj=cnpj_normalizado)
+    empresa = Empresa(
+        nome=nome.strip(),
+        nome_normalizado=nome_normalizado,
+        cnpj=cnpj_normalizado,
+        area=area,
+        segmento=segmento,
+        cidade=cidade,
+        uf=uf,
+    )
     db.add(empresa)
     db.flush()
     return empresa, True

@@ -17,6 +17,7 @@ import re
 from datetime import date
 
 _DATE_PATTERN = re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{4})$")
+_ISO_DATE_PATTERN = re.compile(r"^(\d{4})-(\d{1,2})-(\d{1,2})$")
 
 
 def parse_brazilian_date(raw: str | None) -> date | None:
@@ -42,6 +43,24 @@ def parse_brazilian_date(raw: str | None) -> date | None:
         return None
 
 
+def parse_iso_date(raw: str | None) -> date | None:
+    """Formato AAAA-MM-DD (planilha de empresas/vagas, Fase 12) — mesma
+    postura de `parse_brazilian_date`: só aceita o formato estrito,
+    nunca tenta adivinhar uma data ambígua ou malformada."""
+    if not raw:
+        return None
+
+    match = _ISO_DATE_PATTERN.match(raw.strip())
+    if not match:
+        return None
+
+    year, month, day = (int(part) for part in match.groups())
+    try:
+        return date(year, month, day)
+    except ValueError:
+        return None
+
+
 def compute_convenio_status(data_fim: date | None, hoje: date | None = None) -> str:
     if data_fim is None:
         return "indeterminado"
@@ -51,6 +70,13 @@ def compute_convenio_status(data_fim: date | None, hoje: date | None = None) -> 
 
 def parse_and_compute_status(raw_data_fim: str | None, hoje: date | None = None) -> tuple[date | None, str]:
     """Conveniência: faz os dois passos de uma vez, do jeito que o
-    importador de PDF/CSV vai usar linha a linha."""
+    importador do PDF de convênios usa linha a linha (formato BR)."""
     data_fim = parse_brazilian_date(raw_data_fim)
+    return data_fim, compute_convenio_status(data_fim, hoje)
+
+
+def parse_and_compute_status_iso(raw_data_fim: str | None, hoje: date | None = None) -> tuple[date | None, str]:
+    """Mesma conveniência de `parse_and_compute_status`, para a
+    planilha de empresas/vagas (Fase 12), que traz datas em AAAA-MM-DD."""
+    data_fim = parse_iso_date(raw_data_fim)
     return data_fim, compute_convenio_status(data_fim, hoje)

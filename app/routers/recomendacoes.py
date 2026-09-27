@@ -5,6 +5,7 @@ leva alguns segundos a dezenas de segundos (ver README), então estas
 chamadas podem demorar; o frontend mostra um estado de carregamento.
 """
 
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -15,17 +16,23 @@ from app.core.deps import get_current_aluno, require_admin
 from app.models.aluno import Aluno
 from app.models.empresa import Empresa
 from app.models.recomendacao import Recomendacao
+from app.models.usuario import Usuario
 from app.models.vaga import Vaga
 from app.schemas.recomendacao import (
     AlunoResumoOut,
     ConvenioResumoOut,
     EmpresaResumoOut,
+    GeracaoAlunoResultadoOut,
+    GeracaoRecomendacoesResumoOut,
     RecomendacaoDetalhadaOut,
     VagaResumoOut,
 )
+from app.services.auditoria.log import registrar as registrar_log
 from app.services.recomendacao.caminho_inverso import buscar_alunos_compativeis_com_empresa, buscar_alunos_compativeis_com_vaga
 from app.services.recomendacao.pipeline import gerar_recomendacoes_para_aluno
 from app.services.recomendacao.prospeccao import gerar_prospeccoes_para_aluno
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["recomendacoes"])
 
@@ -80,17 +87,9 @@ def _serializar(db: Session, rec: Recomendacao, incluir_aluno: bool = False) -> 
 
 
 # --------------------------------------------------------------------
-# Aluno: recomendações de vaga + prospecção de empresas (Fase 8 e 9)
+# Aluno: só visualiza (Fase 12) — quem gera é sempre o admin, em lote,
+# para todos os alunos de uma vez (ver `gerar_para_todos` abaixo).
 # --------------------------------------------------------------------
-@router.post("/perfil/recomendacoes/gerar", response_model=list[RecomendacaoDetalhadaOut])
-def gerar(aluno: Aluno = Depends(get_current_aluno), db: Session = Depends(get_db)):
-    recomendacoes = gerar_recomendacoes_para_aluno(db, aluno)
-    prospeccoes = gerar_prospeccoes_para_aluno(db, aluno)
-    todas = recomendacoes + prospeccoes
-    todas.sort(key=lambda r: r.indice_compatibilidade or 0, reverse=True)
-    return [_serializar(db, r) for r in todas]
-
-
 @router.get("/perfil/recomendacoes", response_model=list[RecomendacaoDetalhadaOut])
 def listar(aluno: Aluno = Depends(get_current_aluno), db: Session = Depends(get_db)):
     registros = (
@@ -103,6 +102,79 @@ def listar(aluno: Aluno = Depends(get_current_aluno), db: Session = Depends(get_
         .all()
     )
     return [_serializar(db, r) for r in registros]
+
+
+# --------------------------------------------------------------------
+# Admin: geração em lote para TODOS os alunos (Fase 12) — substitui o
+# botão "Gerar recomendações" que existia na área do aluno. A lógica
+# de compatibilidade (busca vetorial -> regras -> Qwen3) é a mesma de
+# sempre (Fases 8/9); o que muda é quem dispara e para quantos alunos
+# de uma vez.
+# --------------------------------------------------------------------
+@router.post(
+    "/admin/recomendacoes/gerar",
+    response_model=GeracaoRecomendacoesResumoOut,
+    dependencies=[Depends(require_admin)],
+)
+def gerar_para_todos_os_alunos(db: Session = Depends(get_db), usuario: Usuario = Depends(require_admin)):
+    alunos = db.query(Aluno).all()
+    detalhes: list[GeracaoAlunoResultadoOut] = []
+    total_recomendacoes = 0
+    total_prospeccoes = 0
+    com_erro = 0
+
+    for aluno in alunos:
+        try:
+            recomendacoes = gerar_recomendacoes_para_aluno(db, aluno)
+            prospeccoes = gerar_prospeccoes_para_aluno(db, aluno)
+            total_recomendacoes += len(recomendacoes)
+            total_prospeccoes += len(prospeccoes)
+            detalhes.append(
+                GeracaoAlunoResultadoOut(
+                    aluno_id=aluno.id,
+                    matricula=aluno.matricula,
+                    nome_completo=aluno.nome_completo,
+                    recomendacoes_geradas=len(recomendacoes),
+                    prospeccoes_geradas=len(prospeccoes),
+                )
+            )
+        except Exception as exc:
+            # Um aluno com dado problemático (ex.: perfil incompleto,
+            # falha pontual do Ollama que escapou do tratamento interno)
+            # nunca pode interromper o processamento dos demais — é
+            # exatamente o motivo de este loop nunca deixar propagar.
+            db.rollback()
+            com_erro += 1
+            logger.warning("Falha ao gerar recomendacoes para aluno %s: %s", aluno.id, exc)
+            detalhes.append(
+                GeracaoAlunoResultadoOut(
+                    aluno_id=aluno.id,
+                    matricula=aluno.matricula,
+                    nome_completo=aluno.nome_completo,
+                    recomendacoes_geradas=0,
+                    prospeccoes_geradas=0,
+                    erro=str(exc),
+                )
+            )
+
+    registrar_log(
+        db, usuario.id, "gerar_recomendacoes_todos_alunos", None, None,
+        {
+            "alunos_processados": len(alunos),
+            "alunos_com_erro": com_erro,
+            "total_recomendacoes_geradas": total_recomendacoes,
+            "total_prospeccoes_geradas": total_prospeccoes,
+        },
+    )
+    db.commit()
+
+    return GeracaoRecomendacoesResumoOut(
+        alunos_processados=len(alunos),
+        alunos_com_erro=com_erro,
+        total_recomendacoes_geradas=total_recomendacoes,
+        total_prospeccoes_geradas=total_prospeccoes,
+        detalhes=detalhes,
+    )
 
 
 # --------------------------------------------------------------------

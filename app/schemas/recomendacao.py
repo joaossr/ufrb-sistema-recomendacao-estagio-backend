@@ -56,6 +56,31 @@ class AlunoResumoOut(BaseModel):
     curso: str | None
 
 
+class GeracaoAlunoResultadoOut(BaseModel):
+    """Uma linha do resumo de `POST /admin/recomendacoes/gerar` — o
+    que aconteceu para UM aluno dentro do processamento em lote."""
+
+    aluno_id: uuid.UUID
+    matricula: str
+    nome_completo: str | None
+    recomendacoes_geradas: int
+    prospeccoes_geradas: int
+    erro: str | None = None
+
+
+class GeracaoRecomendacoesResumoOut(BaseModel):
+    """Resposta de `POST /admin/recomendacoes/gerar` (Fase 12): o
+    admin dispara para TODOS os alunos cadastrados de uma vez — cada
+    aluno é processado de forma isolada (um erro num aluno não afeta
+    os demais), mesma filosofia de resiliência do resto do sistema."""
+
+    alunos_processados: int
+    alunos_com_erro: int
+    total_recomendacoes_geradas: int
+    total_prospeccoes_geradas: int
+    detalhes: list[GeracaoAlunoResultadoOut]
+
+
 class RecomendacaoDetalhadaOut(BaseModel):
     """Formato consumido pelo frontend (recomendacoes.html): junta a
     Recomendacao com os dados de exibição da empresa/vaga/convênio,

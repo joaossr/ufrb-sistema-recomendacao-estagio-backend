@@ -16,6 +16,7 @@ from app.models.usuario import Usuario
 from app.schemas.importacao import ImportacaoOut
 from app.services.auditoria.log import registrar as registrar_log
 from app.services.importacao.convenios_pdf import import_convenios_pdf
+from app.services.importacao.empresas_vagas_planilha import import_empresas_vagas_planilha
 
 router = APIRouter(prefix="/admin/importacoes", tags=["importacoes"], dependencies=[Depends(require_admin)])
 
@@ -36,6 +37,33 @@ async def importar_convenios_pdf(
     importacao = import_convenios_pdf(db, content, fonte=file.filename)
     registrar_log(
         db, usuario.id, "importar_convenios_pdf", "importacao", importacao.id,
+        {"fonte": file.filename, "total_linhas": importacao.total_linhas, "sucesso": importacao.sucesso},
+    )
+    db.commit()
+    return importacao
+
+
+@router.post("/empresas-vagas", response_model=ImportacaoOut, status_code=status.HTTP_201_CREATED)
+async def importar_empresas_vagas_planilha(
+    file: UploadFile, db: Session = Depends(get_db), usuario: Usuario = Depends(require_admin)
+):
+    """Planilha (CSV/XLSX) de empresas + convênios + vagas (Fase 12) —
+    formato mais rico que o PDF (que só traz empresa+convênio)."""
+    nome = (file.filename or "").lower()
+    if nome.endswith(".csv"):
+        extensao = "csv"
+    elif nome.endswith(".xlsx"):
+        extensao = "xlsx"
+    else:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Envie um arquivo CSV ou XLSX.")
+
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Arquivo muito grande.")
+
+    importacao = import_empresas_vagas_planilha(db, content, extensao, fonte=file.filename)
+    registrar_log(
+        db, usuario.id, "importar_empresas_vagas_planilha", "importacao", importacao.id,
         {"fonte": file.filename, "total_linhas": importacao.total_linhas, "sucesso": importacao.sucesso},
     )
     db.commit()

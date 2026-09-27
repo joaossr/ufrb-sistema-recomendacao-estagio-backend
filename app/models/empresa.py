@@ -20,6 +20,14 @@ class Empresa(Base):
     cnpj: Mapped[str | None] = mapped_column(String(20), unique=True)
     nome: Mapped[str] = mapped_column(String(500), nullable=False)
     nome_normalizado: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
+    # Campos opcionais vindos de importações mais ricas que a do PDF de
+    # convênios original (Fase 5) — ex.: a planilha de empresas/vagas
+    # (Fase 12) traz área/segmento/cidade/UF por linha. Nunca inventados
+    # pelo sistema: só preenchidos quando a fonte de dados os fornece.
+    area: Mapped[str | None] = mapped_column(String(255))
+    segmento: Mapped[str | None] = mapped_column(String(255))
+    cidade: Mapped[str | None] = mapped_column(String(255))
+    uf: Mapped[str | None] = mapped_column(String(2))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     convenios: Mapped[list["Convenio"]] = relationship(back_populates="empresa", cascade="all, delete-orphan")

@@ -4,7 +4,7 @@ API FastAPI que substitui o `localStorage` do frontend por PostgreSQL
 + pgvector, com Ollama/Qwen3 para a recomendação de estágios. Ver o
 plano completo de migração (32 etapas) para o roadmap.
 
-## Status: Fases 1 a 11 concluídas
+## Status: Fases 1 a 11 concluídas + Fase 12 (fora do roteiro original, pedido do usuário)
 
 - **Fase 1**: PostgreSQL + pgvector via Docker, schema completo (24 tabelas), seed de centros/cursos, `GET /api/health`.
 - **Fase 2**: autenticação real (Argon2 + JWT) — `/api/auth/cadastro`, `/api/auth/login`, `/api/auth/me`. Conta admin só existe via `scripts/seed_admin.py`.
@@ -20,7 +20,30 @@ plano completo de migração (32 etapas) para o roadmap.
 
 - **Fase 11**: log de auditoria (`logs_auditoria` — criar/atualizar/excluir empresa/convênio/vaga, login com sucesso/falha sem gravar senha; `GET /api/admin/logs-auditoria`); avaliação humana das recomendações (`avaliacoes_humanas` — um admin registra se concorda com o `nivel` do Qwen3 e uma nota independente de 1 a 5, para comparar LLM x humano na dissertação; `POST/GET /api/admin/recomendacoes/{id}/avaliacoes`, `GET /api/admin/avaliacoes`); suíte de testes automatizados com **pytest** (`tests/`, 96 testes, banco Postgres de teste próprio e isolado — nunca toca no banco de desenvolvimento — Ollama sempre mockado de forma determinística, nunca chamado de verdade). Ver seção "Testes automatizados" abaixo.
 
-**Ainda não implementado**: importador da COOPC (falta arquivo de exemplo), autocomplete do formulário de perfil (`tech-input`/`project-tech-input`/`exp-tech-input` em `perfil.js`) via `/api/tecnologias`/`/api/areas-projeto`/`/api/tipos-projeto` (os endpoints já existem, só falta ligar o `Combobox` a eles).
+- **Fase 12** (pedido explícito do usuário, fora das 32 etapas originais): o fluxo de recomendação passou a ser **centralizado no admin**.
+  - Removida a rota `POST /perfil/recomendacoes/gerar` (o aluno nunca mais dispara a própria geração) e o botão "Gerar recomendações" da página `recomendacoes.html` — o aluno só visualiza (`GET /perfil/recomendacoes`).
+  - Nova `POST /admin/recomendacoes/gerar`: processa **todos os alunos cadastrados** de uma vez (busca vetorial → regras → Qwen3, mesma lógica das Fases 8/9), isolado por aluno (erro num aluno nunca afeta os demais) — retorna um resumo por estudante. Botão equivalente no painel admin (aba Estudantes).
+  - Novo importador de planilha CSV/XLSX de empresas+convênios+vagas combinados (`app/services/importacao/empresas_vagas_planilha.py`, endpoint `POST /admin/importacoes/empresas-vagas`) — cada linha é decomposta nos três registros corretos (nunca texto bruto), CNPJ identifica a empresa (evita duplicar/misturar), convênio/vaga repetidos numa reimportação são atualizados em vez de duplicados. `Empresa` ganhou colunas `area`/`segmento`/`cidade`/`uf` (Fase 12) para não perder dado que a planilha fornece e o PDF de convênios não tinha.
+  - Banco de desenvolvimento limpo de empresas/vagas/convênios/recomendações de teste anteriores (`scripts/limpar_dados_teste_empresas.py`) — alunos/usuários e o log de auditoria não foram tocados.
+  - 5 perfis de estudante de teste criados (`scripts/criar_alunos_teste_fase12.py`), um por área presente na planilha de teste do usuário: Medicina Veterinária, Engenharia de Computação, Zootecnia, Biologia, Engenharia Civil.
+  - Testado: importação da planilha real do usuário (78 linhas, 0 erros — 50 empresas, 59 convênios, 78 vagas, todos os campos verificados linha a linha); suíte pytest com 100 testes (14 deles reescritos para o novo fluxo, incluindo um teste dedicado a isolamento entre alunos na geração em lote). **A geração de recomendações em lote com o Ollama real ainda não foi verificada de ponta a ponta nesta máquina** — bloqueada por RAM insuficiente no momento do teste (ver nota abaixo); o `scripts/test_fase12_manual.py` está pronto para rodar assim que houver memória livre.
+
+**Ainda não implementado**: importador da COOPC (falta arquivo de exemplo — pode ter sido superado pelo importador de planilha da Fase 12, a confirmar com o usuário), autocomplete do formulário de perfil (`tech-input`/`project-tech-input`/`exp-tech-input` em `perfil.js`) via `/api/tecnologias`/`/api/areas-projeto`/`/api/tipos-projeto` (os endpoints já existem, só falta ligar o `Combobox` a eles).
+
+### Nota: RAM insuficiente pode derrubar o Ollama silenciosamente
+
+Se `generate_embedding`/`generate_completion` começarem a falhar com erros
+tipo `CUDA_Host buffer`/`out of memory` mesmo com a GPU livre (`nvidia-smi`
+mostrando VRAM disponível), o problema pode ser RAM do SISTEMA, não da
+GPU — o Ollama também precisa de memória "host" (pinned) para transferir
+dados para a GPU. Confira com:
+```powershell
+Get-CimInstance Win32_OperatingSystem | Select-Object @{n='FreeGB';e={[math]::Round($_.FreePhysicalMemory/1MB,2)}}
+```
+Nesta máquina (8GB de RAM total), rodar Docker+Postgres+Ollama+qwen3:8b
+junto com o navegador e o próprio Claude Code deixa pouquíssima margem —
+feche processos pesados (o Gerenciador de Tarefas ordenado por memória
+ajuda a achar o vilão) antes de rodar uma geração em lote.
 
 ### Sobre o modelo de linguagem usado
 
@@ -104,7 +127,7 @@ e cole o token para testar rotas autenticadas manualmente.
 pytest
 ```
 
-96 testes, ~15s. Não precisa do servidor `uvicorn` no ar nem do
+100 testes, ~18s. Não precisa do servidor `uvicorn` no ar nem do
 Ollama rodando — só do Postgres do `docker compose up -d` (o mesmo
 container do banco de desenvolvimento). Na primeira execução de cada
 sessão de pytest, `tests/conftest.py` recria do zero o banco
@@ -148,7 +171,7 @@ backend/
                              # recomendacoes, avaliacoes, auditoria)
     services/
       lattes/                # parser.py, course_matching.py
-      importacao/             # convenio_status.py, empresas.py, convenios_pdf.py
+      importacao/             # convenio_status.py, empresas.py, convenios_pdf.py, empresas_vagas_planilha.py (CSV/XLSX)
       ollama/                  # client.py — único ponto de chamada à API do Ollama
       embeddings/               # text_representation.py, service.py, search.py
       recomendacao/              # regras.py, analise.py, pipeline.py, prospeccao.py, caminho_inverso.py
@@ -167,14 +190,22 @@ backend/
 ## Próxima fase
 
 Não há próxima fase do roteiro original de 32 passos — as 11 fases
-estão concluídas. O que resta é oportunista:
+estão concluídas, e a Fase 12 (fluxo centralizado no admin + planilha
+de empresas/vagas) atende um pedido explícito posterior do usuário.
+Pendências imediatas:
 
+- **Verificar a geração em lote com o Ollama real nesta máquina**
+  (bloqueada por RAM insuficiente no momento da implementação — ver
+  nota acima). Rodar `python scripts/test_fase12_manual.py` assim que
+  houver memória livre e conferir manualmente no `admin.html` que cada
+  um dos 5 alunos de teste recebeu recomendações da área certa.
 - Ligar o autocomplete do formulário de perfil (`tech-input`,
   `project-tech-input`, `exp-tech-input` em `frontend/js/perfil.js`)
   aos catálogos `/api/tecnologias`/`/api/areas-projeto`/`/api/tipos-projeto`
   via `Combobox.attach` (passo 28) — os endpoints já existem desde a
   Fase 10, só falta o frontend consumir.
-- Importador da COOPC (CSV/XLSX), se um arquivo de exemplo real
-  aparecer — sem isso, seria inventar um schema.
+- Confirmar com o usuário se o importador de planilha da Fase 12
+  cobre o que ele esperava do "importador da COOPC", ou se a COOPC
+  ainda precisa de um formato próprio.
 - Usar `avaliacoes_humanas` de verdade (avaliar uma amostra de
   recomendações reais) para o capítulo de avaliação do TCC.
