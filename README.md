@@ -26,7 +26,7 @@ plano completo de migração (32 etapas) para o roadmap.
   - Novo importador de planilha CSV/XLSX de empresas+convênios+vagas combinados (`app/services/importacao/empresas_vagas_planilha.py`, endpoint `POST /admin/importacoes/empresas-vagas`) — cada linha é decomposta nos três registros corretos (nunca texto bruto), CNPJ identifica a empresa (evita duplicar/misturar), convênio/vaga repetidos numa reimportação são atualizados em vez de duplicados. `Empresa` ganhou colunas `area`/`segmento`/`cidade`/`uf` (Fase 12) para não perder dado que a planilha fornece e o PDF de convênios não tinha.
   - Banco de desenvolvimento limpo de empresas/vagas/convênios/recomendações de teste anteriores (`scripts/limpar_dados_teste_empresas.py`) — alunos/usuários e o log de auditoria não foram tocados.
   - 5 perfis de estudante de teste criados (`scripts/criar_alunos_teste_fase12.py`), um por área presente na planilha de teste do usuário: Medicina Veterinária, Engenharia de Computação, Zootecnia, Biologia, Engenharia Civil.
-  - Testado: importação da planilha real do usuário (78 linhas, 0 erros — 50 empresas, 59 convênios, 78 vagas, todos os campos verificados linha a linha); suíte pytest com 100 testes (14 deles reescritos para o novo fluxo, incluindo um teste dedicado a isolamento entre alunos na geração em lote). **A geração de recomendações em lote com o Ollama real ainda não foi verificada de ponta a ponta nesta máquina** — bloqueada por RAM insuficiente no momento do teste (ver nota abaixo); o `scripts/test_fase12_manual.py` está pronto para rodar assim que houver memória livre.
+  - Testado de ponta a ponta com o Ollama real, depois que a máquina liberou RAM (ver nota abaixo): importação da planilha real do usuário (78 linhas, 0 erros, reimportação depois confirmada idempotente — 0 empresas/convênios duplicados, 78 vagas atualizadas); `POST /admin/recomendacoes/gerar` processou os 8 alunos cadastrados (0 erros, 30 recomendações), e os 5 alunos de teste receberam exatamente as vagas da própria área (Medicina Veterinária só viu vagas de Medicina Veterinária, e assim por diante — nenhuma vaga de outra área vazou para nenhum aluno) com níveis/índices do Qwen3 condizentes com a sobreposição real de tecnologias do perfil; conferido também na tela `recomendacoes.html` do aluno (ex.: aluno de Engenharia Civil viu 5 vagas reais — Planeja Obras, Canteiro Engenharia, InfraBahia, Estrutural Projetos, Engenho Civil — com justificativas coerentes e nenhum erro no console). Suíte pytest com 100 testes (14 deles reescritos para o novo fluxo, incluindo um teste dedicado a isolamento entre alunos na geração em lote).
 
 **Ainda não implementado**: importador da COOPC (falta arquivo de exemplo — pode ter sido superado pelo importador de planilha da Fase 12, a confirmar com o usuário), autocomplete do formulário de perfil (`tech-input`/`project-tech-input`/`exp-tech-input` em `perfil.js`) via `/api/tecnologias`/`/api/areas-projeto`/`/api/tipos-projeto` (os endpoints já existem, só falta ligar o `Combobox` a eles).
 
@@ -44,6 +44,14 @@ Nesta máquina (8GB de RAM total), rodar Docker+Postgres+Ollama+qwen3:8b
 junto com o navegador e o próprio Claude Code deixa pouquíssima margem —
 feche processos pesados (o Gerenciador de Tarefas ordenado por memória
 ajuda a achar o vilão) antes de rodar uma geração em lote.
+
+Aconteceu de verdade durante a Fase 12: com 0,06GB livre, toda chamada
+ao Ollama falhava e a geração em lote retornava 0 recomendações para
+todos os alunos (sem erro nenhum — o sistema degradou graciosamente,
+como projetado). Depois de liberar RAM (0,84GB livre), tudo funcionou
+normalmente; só foi preciso regenerar o embedding dos alunos cuja
+tentativa anterior tinha falhado (rodar de novo qualquer endpoint que
+chame `regenerate_aluno_embedding`, ex.: `PUT /perfil`).
 
 ### Sobre o modelo de linguagem usado
 
@@ -194,11 +202,6 @@ estão concluídas, e a Fase 12 (fluxo centralizado no admin + planilha
 de empresas/vagas) atende um pedido explícito posterior do usuário.
 Pendências imediatas:
 
-- **Verificar a geração em lote com o Ollama real nesta máquina**
-  (bloqueada por RAM insuficiente no momento da implementação — ver
-  nota acima). Rodar `python scripts/test_fase12_manual.py` assim que
-  houver memória livre e conferir manualmente no `admin.html` que cada
-  um dos 5 alunos de teste recebeu recomendações da área certa.
 - Ligar o autocomplete do formulário de perfil (`tech-input`,
   `project-tech-input`, `exp-tech-input` em `frontend/js/perfil.js`)
   aos catálogos `/api/tecnologias`/`/api/areas-projeto`/`/api/tipos-projeto`
