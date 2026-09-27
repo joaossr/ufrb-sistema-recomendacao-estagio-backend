@@ -14,11 +14,11 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/sistema_estagio"
 
     ollama_url: str = "http://localhost:11434"
-    # qwen3:8b existe (baixado), mas em CPU-only nesta máquina é
-    # impraticavelmente lento p/ uso síncrono (nem um prompt trivial
-    # respondeu em minutos) — qwen3:4b como padrão local; trocar via
-    # .env quando houver GPU funcional ou hardware mais forte.
-    ollama_llm_model: str = "qwen3:4b"
+    # Com a GPU (RTX 3050) funcionando corretamente, qwen3:8b (o
+    # modelo do plano original) roda em tempo razoável (~20s por
+    # análise) — voltou a ser o padrão. Se rodar sem GPU utilizável,
+    # troque para qwen3:4b no .env (mais rápido em CPU).
+    ollama_llm_model: str = "qwen3:8b"
     ollama_embed_model: str = "qwen3-embedding:0.6b"  # já é Q8_0 (única quantização publicada nesta tag)
     embedding_dim: int = 1024
 

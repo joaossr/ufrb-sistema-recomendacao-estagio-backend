@@ -13,17 +13,18 @@ plano completo de migração (32 etapas) para o roadmap.
 - **Fase 5**: empresas/convênios estruturados, tratamento determinístico de datas de convênio, importador do PDF de convênios da UFRB (validado contra arquivo real).
 - **Fase 6**: CRUD de vagas.
 - **Fase 7**: representação textual de perfil/empresa/vaga → embeddings via Ollama (`qwen3-embedding:0.6b`, 1024 dimensões) → busca semântica via pgvector (distância de cosseno, Top 20).
-- **Fase 8**: regras objetivas (curso, status da vaga, prazo, convênio) filtrando ANTES do LLM → análise de compatibilidade com `qwen3:4b` (JSON estruturado: nível, índice, pontos compatíveis/parciais, lacunas, justificativa) → `Recomendacao` auditável no Postgres. Endpoint: `POST /api/perfil/recomendacoes/gerar`.
+- **Fase 8**: regras objetivas (curso, status da vaga, prazo, convênio) filtrando ANTES do LLM → análise de compatibilidade com `qwen3:8b` (JSON estruturado: nível, índice, pontos compatíveis/parciais, lacunas, justificativa) → `Recomendacao` auditável no Postgres. Endpoint: `POST /api/perfil/recomendacoes/gerar`.
 
 **Ainda não implementado**: importador da COOPC (falta arquivo de exemplo), página de recomendações/prospecção/caminho inverso (Fase 9), painel administrativo completo (Fase 10), auditoria/testes automatizados/avaliação científica (Fase 11).
 
 ### Sobre o modelo de linguagem usado
 
-O plano original previa `qwen3:8b`, mas nesta máquina (sem GPU
-utilizável, ver abaixo) ele é impraticável: nem um prompt trivial
-respondeu em minutos. `qwen3:4b` responde em ~15-30s por análise.
-Ambos os modelos já estão baixados; troque `OLLAMA_LLM_MODEL` no
-`.env` para `qwen3:8b` se/quando rodar em hardware com GPU funcional.
+`qwen3:8b` (o modelo do plano original) é o padrão — com a GPU (RTX
+3050) rodando corretamente, ele responde em ~20s por análise. Numa
+primeira tentativa sem GPU utilizável ele era impraticável (nem um
+prompt trivial respondia em minutos); se você estiver numa máquina
+sem GPU, troque `OLLAMA_LLM_MODEL` no `.env` para `qwen3:4b`
+(~10-15s em CPU) — ambos os modelos já estão testados e funcionam.
 
 Achado importante: o Qwen3 tem um modo de "pensar" (thinking) que, sem
 ser desligado, consome todo o limite de tokens da resposta e nunca
@@ -38,8 +39,8 @@ chamada de análise por causa disso.
 - [Ollama](https://ollama.com) instalado, com os modelos baixados:
   ```bash
   ollama pull qwen3-embedding:0.6b
-  ollama pull qwen3:4b
-  ollama pull qwen3:8b   # opcional — funciona, mas mais lento (ver abaixo)
+  ollama pull qwen3:8b
+  ollama pull qwen3:4b   # alternativa mais rápida se não houver GPU utilizável
   ```
 
 ### GPU NVIDIA (RTX 3050): funciona, com uma ressalva
