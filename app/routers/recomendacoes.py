@@ -105,6 +105,30 @@ def listar(aluno: Aluno = Depends(get_current_aluno), db: Session = Depends(get_
 
 
 # --------------------------------------------------------------------
+# Admin: relatório consolidado (Fase 13) — todas as recomendações de
+# todos os alunos numa lista só, para o admin ver quem foi compatível
+# com o quê sem precisar abrir o perfil de cada estudante.
+# --------------------------------------------------------------------
+@router.get(
+    "/admin/recomendacoes",
+    response_model=list[RecomendacaoDetalhadaOut],
+    dependencies=[Depends(require_admin)],
+)
+def listar_todas(
+    tipo: str | None = None,
+    nivel: str | None = None,
+    db: Session = Depends(get_db),
+):
+    query = db.query(Recomendacao)
+    if tipo:
+        query = query.filter(Recomendacao.tipo == tipo)
+    if nivel:
+        query = query.filter(Recomendacao.nivel == nivel)
+    registros = query.order_by(Recomendacao.indice_compatibilidade.desc()).all()
+    return [_serializar(db, r, incluir_aluno=True) for r in registros]
+
+
+# --------------------------------------------------------------------
 # Admin: geração em lote para TODOS os alunos (Fase 12) — substitui o
 # botão "Gerar recomendações" que existia na área do aluno. A lógica
 # de compatibilidade (busca vetorial -> regras -> Qwen3) é a mesma de

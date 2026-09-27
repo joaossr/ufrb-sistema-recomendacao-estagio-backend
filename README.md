@@ -4,7 +4,7 @@ API FastAPI que substitui o `localStorage` do frontend por PostgreSQL
 + pgvector, com Ollama/Qwen3 para a recomendação de estágios. Ver o
 plano completo de migração (32 etapas) para o roadmap.
 
-## Status: Fases 1 a 11 concluídas + Fase 12 (fora do roteiro original, pedido do usuário)
+## Status: Fases 1 a 11 concluídas + Fases 12 e 13 (fora do roteiro original, pedido do usuário)
 
 - **Fase 1**: PostgreSQL + pgvector via Docker, schema completo (24 tabelas), seed de centros/cursos, `GET /api/health`.
 - **Fase 2**: autenticação real (Argon2 + JWT) — `/api/auth/cadastro`, `/api/auth/login`, `/api/auth/me`. Conta admin só existe via `scripts/seed_admin.py`.
@@ -27,6 +27,8 @@ plano completo de migração (32 etapas) para o roadmap.
   - Banco de desenvolvimento limpo de empresas/vagas/convênios/recomendações de teste anteriores (`scripts/limpar_dados_teste_empresas.py`) — alunos/usuários e o log de auditoria não foram tocados.
   - 5 perfis de estudante de teste criados (`scripts/criar_alunos_teste_fase12.py`), um por área presente na planilha de teste do usuário: Medicina Veterinária, Engenharia de Computação, Zootecnia, Biologia, Engenharia Civil.
   - Testado de ponta a ponta com o Ollama real, depois que a máquina liberou RAM (ver nota abaixo): importação da planilha real do usuário (78 linhas, 0 erros, reimportação depois confirmada idempotente — 0 empresas/convênios duplicados, 78 vagas atualizadas); `POST /admin/recomendacoes/gerar` processou os 8 alunos cadastrados (0 erros, 30 recomendações), e os 5 alunos de teste receberam exatamente as vagas da própria área (Medicina Veterinária só viu vagas de Medicina Veterinária, e assim por diante — nenhuma vaga de outra área vazou para nenhum aluno) com níveis/índices do Qwen3 condizentes com a sobreposição real de tecnologias do perfil; conferido também na tela `recomendacoes.html` do aluno (ex.: aluno de Engenharia Civil viu 5 vagas reais — Planeja Obras, Canteiro Engenharia, InfraBahia, Estrutural Projetos, Engenho Civil — com justificativas coerentes e nenhum erro no console). Suíte pytest com 100 testes (14 deles reescritos para o novo fluxo, incluindo um teste dedicado a isolamento entre alunos na geração em lote).
+
+- **Fase 13** (pedido explícito do usuário): relatório consolidado de recomendações no painel admin — nova `GET /admin/recomendacoes` (admin-only, filtros opcionais `?tipo=`/`?nivel=`) lista **todas** as recomendações de **todos** os alunos com o aluno já embutido em cada item (reaproveita o mesmo `_serializar(..., incluir_aluno=True)` do caminho inverso). Nova aba "Recomendações" em `admin.html` com o botão de gerar em lote (movido da aba Estudantes) + a tabela do relatório (Estudante/Curso/Empresa/Vaga/Tipo/Nível/Índice) com filtro por nível — o admin não precisa mais abrir o perfil de cada estudante para ver quem foi compatível com quê. Testado (3 novos testes: lista todos, exige admin, filtra por nível) e verificado ao vivo no navegador com os dados reais da Fase 12 (30 recomendações, ordenadas por índice).
 
 **Ainda não implementado**: importador da COOPC (falta arquivo de exemplo — pode ter sido superado pelo importador de planilha da Fase 12, a confirmar com o usuário), autocomplete do formulário de perfil (`tech-input`/`project-tech-input`/`exp-tech-input` em `perfil.js`) via `/api/tecnologias`/`/api/areas-projeto`/`/api/tipos-projeto` (os endpoints já existem, só falta ligar o `Combobox` a eles).
 
@@ -135,7 +137,7 @@ e cole o token para testar rotas autenticadas manualmente.
 pytest
 ```
 
-100 testes, ~18s. Não precisa do servidor `uvicorn` no ar nem do
+103 testes, ~15s. Não precisa do servidor `uvicorn` no ar nem do
 Ollama rodando — só do Postgres do `docker compose up -d` (o mesmo
 container do banco de desenvolvimento). Na primeira execução de cada
 sessão de pytest, `tests/conftest.py` recria do zero o banco

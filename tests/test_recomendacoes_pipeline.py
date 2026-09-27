@@ -201,3 +201,38 @@ def test_recomendacao_e_avaliavel_por_um_admin(client, aluno_a, admin_headers, c
     )
     assert resp.status_code == 201
     assert resp.json()["nota_humana"] == 4
+
+
+def test_relatorio_admin_lista_recomendacoes_de_todos_os_alunos(client, aluno_a, aluno_b, admin_headers, curso_ti, mock_ollama):
+    """Fase 13: o admin vê todas as recomendações de todos os alunos
+    numa lista só, sem precisar abrir o perfil de cada um."""
+    _preparar_aluno_com_curso(client, aluno_a, curso_ti, mock_ollama)
+    _criar_empresa_com_vaga_ativa(client, admin_headers, mock_ollama, curso_exigido="Engenharia de Computação")
+    _gerar_para_todos(client, admin_headers)
+
+    resp = client.get("/api/admin/recomendacoes", headers=admin_headers)
+    assert resp.status_code == 200
+    resultados = resp.json()
+    assert len(resultados) >= 1
+    assert all(r["aluno"] is not None for r in resultados)
+    assert any(r["aluno"]["matricula"] == aluno_a["usuario"]["matricula"] for r in resultados)
+    # aluno_b nunca preencheu perfil/curso — não deveria ter nenhuma recomendação no relatório
+    assert not any(r["aluno"]["matricula"] == aluno_b["usuario"]["matricula"] for r in resultados)
+
+
+def test_relatorio_admin_exige_admin(client, aluno_a):
+    resp = client.get("/api/admin/recomendacoes", headers=aluno_a["headers"])
+    assert resp.status_code == 403
+
+
+def test_relatorio_admin_filtra_por_nivel(client, aluno_a, admin_headers, curso_ti, mock_ollama):
+    _preparar_aluno_com_curso(client, aluno_a, curso_ti, mock_ollama)
+    _criar_empresa_com_vaga_ativa(client, admin_headers, mock_ollama, curso_exigido="Engenharia de Computação")
+    _gerar_para_todos(client, admin_headers)
+
+    resp = client.get("/api/admin/recomendacoes?nivel=alta", headers=admin_headers)
+    assert resp.status_code == 200
+    assert all(r["nivel"] == "alta" for r in resp.json())
+
+    resp = client.get("/api/admin/recomendacoes?nivel=baixa", headers=admin_headers)
+    assert resp.json() == []
