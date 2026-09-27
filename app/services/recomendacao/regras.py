@@ -28,7 +28,10 @@ class CandidatoElegivel:
     similaridade: float
 
 
-def _curso_compativel(aluno: Aluno, vaga: Vaga) -> bool:
+def curso_compativel(aluno: Aluno, vaga: Vaga) -> bool:
+    """Público de propósito: reaproveitado pelo caminho inverso
+    (services/recomendacao/caminho_inverso.py) — mesma regra nos dois
+    sentidos (aluno->vaga e vaga->aluno)."""
     if not vaga.cursos:
         return True  # vaga não restringe por curso
     if aluno.curso is None:
@@ -51,7 +54,7 @@ def _convenio_ok(vaga: Vaga) -> bool:
 
 
 def vaga_elegivel(aluno: Aluno, vaga: Vaga) -> bool:
-    return vaga.status == "ativa" and _curso_compativel(aluno, vaga) and _vaga_dentro_do_prazo(vaga) and _convenio_ok(vaga)
+    return vaga.status == "ativa" and curso_compativel(aluno, vaga) and _vaga_dentro_do_prazo(vaga) and _convenio_ok(vaga)
 
 
 def filtrar_candidatos_elegiveis(

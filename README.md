@@ -4,7 +4,7 @@ API FastAPI que substitui o `localStorage` do frontend por PostgreSQL
 + pgvector, com Ollama/Qwen3 para a recomendação de estágios. Ver o
 plano completo de migração (32 etapas) para o roadmap.
 
-## Status: Fases 1 a 8 concluídas
+## Status: Fases 1 a 9 concluídas
 
 - **Fase 1**: PostgreSQL + pgvector via Docker, schema completo (24 tabelas), seed de centros/cursos, `GET /api/health`.
 - **Fase 2**: autenticação real (Argon2 + JWT) — `/api/auth/cadastro`, `/api/auth/login`, `/api/auth/me`. Conta admin só existe via `scripts/seed_admin.py`.
@@ -14,8 +14,9 @@ plano completo de migração (32 etapas) para o roadmap.
 - **Fase 6**: CRUD de vagas.
 - **Fase 7**: representação textual de perfil/empresa/vaga → embeddings via Ollama (`qwen3-embedding:0.6b`, 1024 dimensões) → busca semântica via pgvector (distância de cosseno, Top 20).
 - **Fase 8**: regras objetivas (curso, status da vaga, prazo, convênio) filtrando ANTES do LLM → análise de compatibilidade com `qwen3:8b` (JSON estruturado: nível, índice, pontos compatíveis/parciais, lacunas, justificativa) → `Recomendacao` auditável no Postgres. Endpoint: `POST /api/perfil/recomendacoes/gerar`.
+- **Fase 9**: `frontend/recomendacoes.html` (cards de vaga + prospecção, filtros por nível) consumindo a API de verdade; prospecção (empresa compatível sem vaga ativa — nunca chamada de "vaga disponível"); caminho inverso no admin (`POST /api/admin/vagas/{id}/recomendacoes/gerar` e `.../empresas/{id}/...`, aluno bloqueado dessas rotas).
 
-**Ainda não implementado**: importador da COOPC (falta arquivo de exemplo), página de recomendações/prospecção/caminho inverso (Fase 9), painel administrativo completo (Fase 10), auditoria/testes automatizados/avaliação científica (Fase 11).
+**Ainda não implementado**: importador da COOPC (falta arquivo de exemplo), painel administrativo completo com UI para o caminho inverso (Fase 10 — hoje só a API existe), auditoria/testes automatizados/avaliação científica (Fase 11).
 
 ### Sobre o modelo de linguagem usado
 
@@ -127,6 +128,7 @@ backend/
 
 ## Próxima fase
 
-Fase 9 — página de recomendações no frontend, prospecção (empresa
-compatível sem vaga ativa) e o caminho inverso (painel admin: vaga ou
-empresa → alunos compatíveis).
+Fase 10 — painel administrativo completo (estudantes, empresas,
+convênios, vagas, recomendações, importações, erros/revisão, UI para
+o caminho inverso que hoje só existe via API) + autocomplete via
+backend para tecnologias/áreas/cursos.

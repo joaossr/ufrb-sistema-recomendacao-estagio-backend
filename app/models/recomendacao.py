@@ -18,7 +18,7 @@ class Recomendacao(Base):
     __tablename__ = "recomendacoes"
     __table_args__ = (
         CheckConstraint(
-            "tipo IN ('aluno_para_vaga', 'aluno_para_empresa', 'vaga_para_aluno')",
+            "tipo IN ('aluno_para_vaga', 'aluno_para_empresa', 'vaga_para_aluno', 'empresa_para_aluno')",
             name="ck_recomendacoes_tipo",
         ),
     )
